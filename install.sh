@@ -4,12 +4,11 @@
 #   1) detects distro (apt vs yum)
 #   2) installs nginx, mysql-server (mariadb), php-fpm, php-mysql
 #   3) prompts for current MySQL root PW (if any) and new root PW
-#   4) prompts for PROJECT NAME → creates DB/project user, random password
-#   5) asks for DOMAIN (DNS) → writes nginx vhost w/ per‐project logs
-#   6) asks for SSL certificate & key paths → enables HTTPS in nginx
-#   7) copies everything (except install.sh & ./sql/) into /var/www/<project>
-#   8) patches db.php with the new DB credentials
-#   9) restarts/reloads services, and prints final URL.
+#   4) prompts for PROJECT NAME → creates DB and MySQL user with random password
+#   5) asks for domain, SSL certs → writes nginx vhost with per‐project logs
+#   6) creates /var/www/<project>, copies files (except install.sh & sql/)
+#   7) writes a fresh db.php into /var/www/<project>/ with correct credentials
+#   8) reloads/restarts services and prints final URL & NEW database credentials
 #
 # USAGE: sudo ./install.sh
 #
@@ -62,17 +61,16 @@ $UPDATE_CMD
 
 echo "→ Installing nginx, mysql-server (mariadb), php-fpm, and php-mysql…"
 if [[ $PKG_MANAGER == "apt" ]]; then
-  # On Debian/Ubuntu, mysql-server is MariaDB by default (or MySQL 8+).
+  # On Debian/Ubuntu, mysql-server installs MariaDB or MySQL 8+
   $INSTALL_CMD nginx mysql-server $PHP_FPM_PKG $PHP_MYSQL_PKG
 elif [[ $PKG_MANAGER == "yum" || $PKG_MANAGER == "dnf" ]]; then
-  # On CentOS/RHEL, mariadb-server is usually provided via "mysql-server" alias.
   $INSTALL_CMD epel-release -y || true
   $INSTALL_CMD nginx mariadb-server $PHP_FPM_PKG $PHP_MYSQL_PKG
   systemctl enable mariadb
   systemctl start mariadb
 fi
 
-# Ensure services are enabled
+# Ensure services are enabled & running
 if [[ $PKG_MANAGER == "apt" ]]; then
   systemctl enable mysql
   systemctl start mysql
@@ -106,7 +104,6 @@ while true; do
 done
 
 # Apply the new root password.
-# If current is blank, try without "-p". Otherwise use "-p$CURRENT".
 if [[ -z "$MYSQL_CURRENT_ROOT_PW" ]]; then
   mysql --protocol=socket \
     -uroot <<_SQL
@@ -121,7 +118,7 @@ FLUSH PRIVILEGES;
 _SQL
 fi
 
-echo "✔ MySQL root password has been set to: <hidden>"
+echo "✔ MySQL root password has been set."
 
 #############################################################################
 # 4) Prompt for PROJECT NAME → create DB, user, random password
@@ -142,7 +139,7 @@ done
 
 DB_NAME="$PROJECT_NAME"
 DB_USER="$PROJECT_NAME"
-# Generate a 16-character random password (base64, minus trailing '=')
+# Generate a 16-character random password (base64, remove “=” “+” “/”)
 DB_PASS="$(openssl rand -base64 12 | tr -d '=+/')"
 
 echo
@@ -159,7 +156,7 @@ echo "• DB password for user '$DB_USER': $DB_PASS"
 echo
 
 #############################################################################
-# 5) Prompt for DOMAIN (DNS) → create /var/www/<project>, copy files, patch db.php
+# 5) Prompt for DOMAIN (DNS) → copy files & write db.php
 #############################################################################
 echo
 echo "------------------------------------------------------------"
@@ -169,17 +166,14 @@ echo "------------------------------------------------------------"
 WEBROOT_PARENT="/var/www"
 DOC_ROOT="$WEBROOT_PARENT/$PROJECT_NAME"
 
-# Make sure parent exists
-mkdir -p "$WEBROOT_PARENT"
-
 # Create the project’s document root
 mkdir -p "$DOC_ROOT"
 echo "→ Created document root: $DOC_ROOT"
 
-echo "→ Copying files into $DOC_ROOT (excluding install.sh and sql/)..."
+echo "→ Copying project files into $DOC_ROOT (excluding install.sh and sql/)..."
 rsync -av --exclude="install.sh" --exclude="sql" ./ "$DOC_ROOT/" >/dev/null
 
-# Detect which system user should own it:
+# Determine webserver user/group
 if [[ $PKG_MANAGER == "apt" ]]; then
   WWW_USER="www-data"
   WWW_GROUP="www-data"
@@ -192,21 +186,34 @@ chmod -R 755 "$DOC_ROOT"
 
 echo "✔ Files copied and permissions set to $WWW_USER:$WWW_GROUP."
 
-# Now patch db.php in the new document root:
+# Overwrite or create a fresh db.php with the new credentials
 DB_PHP_FILE="$DOC_ROOT/db.php"
+cat > "$DB_PHP_FILE" <<EOF
+<?php
+// db.php — database connection using PDO
+\$host = 'localhost';
+\$db   = '$DB_NAME';
+\$user = '$DB_USER';
+\$pass = '$DB_PASS';
+\$charset = 'utf8mb4';
 
-if [[ -f "$DB_PHP_FILE" ]]; then
-  # Use sed to replace $db, $user, and $pass lines.
-  sed -ri \
-    -e "s#^(\s*\$db\s*=\s*).*\$#\1'$DB_NAME';#g" \
-    -e "s#^(\s*\$user\s*=\s*).*\$#\1'$DB_USER';#g" \
-    -e "s#^(\s*\$pass\s*=\s*).*\$#\1'$DB_PASS';#g" \
-    "$DB_PHP_FILE"
+\$dsn = "mysql:host=\$host;dbname=\$db;charset=\$charset";
+\$options = [
+    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+    PDO::ATTR_EMULATE_PREPARES   => false,
+];
+try {
+    \$pdo = new PDO(\$dsn, \$user, \$pass, \$options);
+} catch (PDOException \$e) {
+    die('Database connection failed: ' . \$e->getMessage());
+}
+?>
+EOF
 
-  echo "✔ Patched db.php with new credentials (DB, user, password)."
-else
-  echo "WARNING: Could not find db.php at $DB_PHP_FILE. Please edit it manually."
-fi
+chown "$WWW_USER":"$WWW_GROUP" "$DB_PHP_FILE"
+chmod 640 "$DB_PHP_FILE"
+echo "✔ Wrote new db.php with project credentials."
 
 echo
 echo "→ Nginx server block and SSL setup coming next…"
@@ -224,7 +231,7 @@ while true; do
 done
 
 echo
-echo "→ We’ll now need your SSL certificate and key to enable HTTPS."
+echo "→ Provide SSL certificate and key to enable HTTPS:"
 read -p       "Path to SSL certificate file (e.g. /etc/ssl/certs/project.crt): " SSL_CERT_PATH
 read -p       "Path to SSL key file       (e.g. /etc/ssl/private/project.key): " SSL_KEY_PATH
 
@@ -238,7 +245,7 @@ if [[ ! -f "$SSL_KEY_PATH" ]]; then
   exit 1
 fi
 
-# Find the PHP-FPM socket (Debian/Ubuntu) or fallback to /run/php-fpm/www.sock (CentOS)
+# Find the PHP-FPM socket (Debian/Ubuntu) or fallback to /run/php-fpm/www.sock (CentOS/RHEL)
 PHP_FPM_SOCK=""
 if ls /run/php/php*-fpm.sock &>/dev/null; then
   PHP_FPM_SOCK="$(ls /run/php/php*-fpm.sock | head -n1)"
@@ -249,10 +256,10 @@ else
   exit 1
 fi
 
-# Build the nginx configuration file
+# Write the nginx configuration for this project
 NGINX_CONF="/etc/nginx/sites-available/$PROJECT_NAME"
 
-cat >"$NGINX_CONF" <<EOF
+cat > "$NGINX_CONF" <<EOF
 # ------------------------------------------------------------------------
 # Nginx server block for $PROJECT_NAME
 # ------------------------------------------------------------------------
@@ -276,7 +283,7 @@ server {
     root $DOC_ROOT;
     index index.php index.html index.htm;
 
-    # Logs
+    # Per‐project logs
     access_log /var/log/nginx/${PROJECT_NAME}-access.log;
     error_log  /var/log/nginx/${PROJECT_NAME}-error.log;
 
@@ -285,7 +292,7 @@ server {
         try_files \$uri \$uri/ =404;
     }
 
-    # PHP-FPM handling
+    # PHP-FPM processing
     location ~ \\.php\$ {
         include fastcgi_params;
         fastcgi_split_path_info ^(.+\\.php)(/.+)\$;
@@ -300,10 +307,8 @@ server {
 }
 EOF
 
-# Enable the new site
+# Enable the new site and disable default
 ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/$PROJECT_NAME
-
-# Disable default site if it exists
 if [[ -e /etc/nginx/sites-enabled/default ]]; then
   rm -f /etc/nginx/sites-enabled/default
 fi
@@ -319,7 +324,7 @@ if nginx -t &>/dev/null; then
   echo "✔ Nginx config OK, reloading."
   systemctl reload nginx
 else
-  echo "ERROR: Nginx configuration test failed. Please check /etc/nginx/sites-available/$PROJECT_NAME"
+  echo "ERROR: Nginx configuration test failed. Check $NGINX_CONF"
   exit 1
 fi
 
@@ -340,7 +345,7 @@ fi
 echo "✔ All services restarted."
 
 #############################################################################
-# 8) Print final URL and credentials summary
+# 8) Print final URL and NEW database credentials
 #############################################################################
 echo
 echo "------------------------------------------------------------"
@@ -348,16 +353,17 @@ echo " INSTALLATION COMPLETE "
 echo "------------------------------------------------------------"
 echo "Project URL:  https://$PROJECT_DOMAIN"
 echo
-echo "MySQL credentials for this project:"
-echo "  • Database:        $DB_NAME"
-echo "  • MySQL username:  $DB_USER"
-echo "  • MySQL password:  $DB_PASS"
+echo "New Database Credentials:"
+echo "  • Database Name:   $DB_NAME"
+echo "  • Database User:   $DB_USER"
+echo "  • Database Pass:   $DB_PASS"
 echo
-echo "db.php was updated under $DOC_ROOT/db.php"
+echo "db.php has been written to: $DOC_ROOT/db.php"
 echo "Document root: $DOC_ROOT"
 echo "Nginx logs: /var/log/nginx/${PROJECT_NAME}-access.log  and  /var/log/nginx/${PROJECT_NAME}-error.log"
 echo
-echo "You can now point your DNS (A/AAAA) to this server’s IP, and visit https://$PROJECT_DOMAIN"
+echo "Make sure your DNS A/AAAA record for $PROJECT_DOMAIN points to this server’s IP."
+echo "Visit https://$PROJECT_DOMAIN to see the login page."
 echo
 
 exit 0
