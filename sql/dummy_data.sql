@@ -17,14 +17,15 @@ INSERT INTO roles (role_name, role_desc) VALUES
     ('email.manage', 'Configure Email/SMTP Settings'),
     ('audit.view',   'View Audit Log'),
     ('profile.edit', 'Edit Own Profile'),
-    ('role.assign', 'Assign Permissions to Roles');
+    ('role.assign', 'Assign Permissions to Roles'),
+    ('permission.manage', 'Create/Edit/Delete Permissions');
 
   -- Assign some default permissions to “admin” role (role_id=1 if that was seeded earlier)
   INSERT IGNORE INTO role_permissions (role_id, permission_id)
     SELECT r.id, p.id
     FROM roles r
     JOIN permissions p
-      ON p.permission_key IN ('user.manage','role.manage','email.manage','audit.view','profile.edit','role.assign')
+      ON p.permission_key IN ('user.manage','role.manage','email.manage','audit.view','profile.edit','role.assign','permission.manage')
     WHERE r.role_name = 'admin';
 
   -- Optionally give “user” role only the “profile.edit” permission:

@@ -48,7 +48,8 @@ $user = currentUser($pdo);
                   hasPermission($pdo, 'role.manage') ||
                   hasPermission($pdo, 'role.assign') ||
                   hasPermission($pdo, 'email.manage') ||
-                  hasPermission($pdo, 'audit.view')): ?>
+                  hasPermission($pdo, 'audit.view') ||
+                  hasPermission($pdo, 'permission.manage')): ?>
           <li class="nav-item has-treeview">
             <a href="#" class="nav-link">
               <i class="nav-icon fas fa-cog"></i>
@@ -81,6 +82,15 @@ $user = currentUser($pdo);
                   <a href="/pages/role_permissions.php" class="nav-link">
                     <i class="far fa-circle nav-icon"></i>
                     <p>Role Permissions</p>
+                  </a>
+                </li>
+              <?php endif; ?>
+
+              <?php if (hasPermission($pdo, 'permission.manage')): ?>
+                <li class="nav-item">
+                  <a href="/pages/permissions.php" class="nav-link">
+                    <i class="far fa-circle nav-icon"></i>
+                    <p>Permissions</p>
                   </a>
                 </li>
               <?php endif; ?>
