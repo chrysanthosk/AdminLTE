@@ -1,13 +1,14 @@
 <?php
 // login.php — user login with optional 2FA
+
 require_once 'auth.php';
 require_once 'GoogleAuthenticator.php';
 
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $email = $_POST['email'];
+    $email    = $_POST['email'];
     $password = $_POST['password'];
-    $code = isset($_POST['code']) ? $_POST['code'] : '';
+    $code     = $_POST['code'] ?? '';
 
     $stmt = $pdo->prepare('SELECT * FROM users WHERE email = ?');
     $stmt->execute([$email]);
@@ -21,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $ga = new PHPGangsta_GoogleAuthenticator();
                 if ($ga->verifyCode($user['twofa_secret'], $code, 2)) {
                     $_SESSION['user_id'] = $user['id'];
-                    $_SESSION['role'] = $user['role'];
+                    $_SESSION['role']    = $user['role'];
                     logAction($pdo, $user['id'], 'Logged in with 2FA');
                     header('Location: pages/dashboard.php');
                     exit();
@@ -31,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         } else {
             $_SESSION['user_id'] = $user['id'];
-            $_SESSION['role'] = $user['role'];
+            $_SESSION['role']    = $user['role'];
             logAction($pdo, $user['id'], 'Logged in');
             header('Location: pages/dashboard.php');
             exit();
@@ -48,9 +49,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Login | Admin Panel</title>
 
-  <!-- AdminLTE CSS -->
+  <!-- AdminLTE Light CSS -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/css/adminlte.min.css">
-  <!-- Font Awesome (for icons) -->
+  <!-- AdminLTE Dark CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/css/adminlte-dark.min.css">
+  <!-- Font Awesome (icons) -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.15.4/css/all.min.css">
 </head>
 <body class="hold-transition login-page">
@@ -59,7 +62,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <div class="login-logo">
     <a href="#"><b>Admin</b>Panel</a>
   </div>
+
   <div class="card">
+    <div class="card-header text-center">
+      <!-- Dark/Light toggle switch -->
+      <div class="custom-control custom-switch">
+        <input type="checkbox" class="custom-control-input" id="theme-switch">
+        <label class="custom-control-label" for="theme-switch">Dark Mode</label>
+      </div>
+    </div>
+
     <div class="card-body login-card-body">
       <p class="login-box-msg">Sign in to start your session</p>
 
@@ -108,5 +120,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
 <!-- AdminLTE App -->
 <script src="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/js/adminlte.min.js"></script>
+
+<script>
+// On page load, apply saved theme (light/dark) from localStorage
+document.addEventListener('DOMContentLoaded', () => {
+  const switchEl = document.getElementById('theme-switch');
+
+  function applyTheme(isDark) {
+    if (isDark) {
+      document.body.classList.add('dark-mode');
+      switchEl.checked = true;
+      localStorage.theme = 'dark';
+    } else {
+      document.body.classList.remove('dark-mode');
+      switchEl.checked = false;
+      localStorage.theme = 'light';
+    }
+  }
+
+  // Initialize based on saved preference:
+  const saved = localStorage.theme || 'light';
+  applyTheme(saved === 'dark');
+
+  // Toggle event:
+  switchEl.addEventListener('change', () => {
+    applyTheme(switchEl.checked);
+  });
+});
+</script>
 </body>
 </html>
