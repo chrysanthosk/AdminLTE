@@ -1,5 +1,5 @@
 <?php
-// login.php - user login with optional 2FA
+// login.php — user login with optional 2FA
 require_once 'auth.php';
 require_once 'GoogleAuthenticator.php';
 
@@ -42,56 +42,71 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 ?>
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Login | Admin Panel</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login | Admin Panel</title>
+
+  <!-- AdminLTE CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/css/adminlte.min.css">
+  <!-- Font Awesome (for icons) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.15.4/css/all.min.css">
 </head>
 <body class="hold-transition login-page">
+
 <div class="login-box">
-    <div class="login-logo">
-        <a href="#"><b>Admin</b>Panel</a>
-    </div>
-    <div class="card">
-        <div class="card-body login-card-body">
-            <p class="login-box-msg">Sign in to start your session</p>
-            <?php if ($error): ?>
-                <div class="alert alert-danger"><?php echo $error; ?></div>
-            <?php endif; ?>
-            <form action="" method="post">
-                <div class="input-group mb-3">
-                    <input type="email" name="email" class="form-control" placeholder="Email" required>
-                    <div class="input-group-append">
-                        <div class="input-group-text"><span class="fas fa-envelope"></span></div>
-                    </div>
-                </div>
-                <div class="input-group mb-3">
-                    <input type="password" name="password" class="form-control" placeholder="Password" required>
-                    <div class="input-group-append">
-                        <div class="input-group-text"><span class="fas fa-lock"></span></div>
-                    </div>
-                </div>
-                <div class="input-group mb-3">
-                    <input type="text" name="code" class="form-control" placeholder="2FA Code (if enabled)">
-                    <div class="input-group-append">
-                        <div class="input-group-text"><span class="fas fa-key"></span></div>
-                    </div>
-                </div>
-                <div class="row">
-                    <div class="col-8">
-                        <a href="forgot_password.php">I forgot my password</a>
-                    </div>
-                    <div class="col-4">
-                        <button type="submit" class="btn btn-primary btn-block">Sign In</button>
-                    </div>
-                </div>
-            </form>
+  <div class="login-logo">
+    <a href="#"><b>Admin</b>Panel</a>
+  </div>
+  <div class="card">
+    <div class="card-body login-card-body">
+      <p class="login-box-msg">Sign in to start your session</p>
+
+      <?php if ($error): ?>
+        <div class="alert alert-danger"><?php echo $error; ?></div>
+      <?php endif; ?>
+
+      <form action="" method="post">
+        <div class="input-group mb-3">
+          <input type="email" name="email" class="form-control" placeholder="Email" required>
+          <div class="input-group-append">
+            <div class="input-group-text"><span class="fas fa-envelope"></span></div>
+          </div>
         </div>
+
+        <div class="input-group mb-3">
+          <input type="password" name="password" class="form-control" placeholder="Password" required>
+          <div class="input-group-append">
+            <div class="input-group-text"><span class="fas fa-lock"></span></div>
+          </div>
+        </div>
+
+        <div class="input-group mb-3">
+          <input type="text" name="code" class="form-control" placeholder="2FA Code (if enabled)">
+          <div class="input-group-append">
+            <div class="input-group-text"><span class="fas fa-key"></span></div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col-8">
+            <a href="forgot_password.php">I forgot my password</a>
+          </div>
+          <div class="col-4">
+            <button type="submit" class="btn btn-primary btn-block">Sign In</button>
+          </div>
+        </div>
+      </form>
     </div>
+  </div>
 </div>
+
+<!-- jQuery -->
 <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+<!-- Bootstrap 4 -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
+<!-- AdminLTE App -->
+<script src="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/js/adminlte.min.js"></script>
 </body>
 </html>

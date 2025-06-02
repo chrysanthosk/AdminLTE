@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 #
 # install.sh — unattended setup for AdminLTE/PHP/MySQL admin panel.
-#   1) detects distro (apt vs yum)
-#   2) installs nginx, mysql-server (mariadb), php-fpm, php-mysql
-#   3) prompts for current MySQL root PW (if any) and new root PW
-#   4) prompts for PROJECT NAME → creates DB and MySQL user with random password
-#   5) asks for domain, SSL certs → writes nginx vhost with per‐project logs
-#   6) creates /var/www/<project>, copies files (except install.sh & sql/)
-#   7) writes a fresh db.php into /var/www/<project>/ with correct credentials
-#   8) reloads/restarts services and prints final URL & NEW database credentials
+#   1) Detect distro (apt vs yum/dnf) and install nginx, mariadb/mysql, php-fpm, php-mysql
+#   2) Prompt for current MySQL root PW (if any) and new root PW
+#   3) Prompt for PROJECT NAME → create DB and MySQL user with random password
+#   4) Import sql/schema.sql + sql/dummy_data.sql into new DB
+#   5) Ask for domain & SSL paths → write nginx vhost with per‐project logs
+#   6) Create /var/www/<project>, copy files (except install.sh & sql/), set permissions
+#   7) Write a fresh db.php into /var/www/<project>/ with correct credentials
+#   8) Reload/restart services and print final URL & NEW database credentials
 #
 # USAGE: sudo ./install.sh
 #
@@ -24,7 +24,7 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 #############################################################################
-# 2) Detect package manager (apt vs yum/dnf) and set install commands
+# 2) Detect package manager and set install commands
 #############################################################################
 PKG_MANAGER=""
 UPDATE_CMD=""
@@ -61,7 +61,6 @@ $UPDATE_CMD
 
 echo "→ Installing nginx, mysql-server (mariadb), php-fpm, and php-mysql…"
 if [[ $PKG_MANAGER == "apt" ]]; then
-  # On Debian/Ubuntu, mysql-server installs MariaDB or MySQL 8+
   $INSTALL_CMD nginx mysql-server $PHP_FPM_PKG $PHP_MYSQL_PKG
 elif [[ $PKG_MANAGER == "yum" || $PKG_MANAGER == "dnf" ]]; then
   $INSTALL_CMD epel-release -y || true
@@ -82,13 +81,12 @@ systemctl enable nginx
 systemctl restart nginx
 
 #############################################################################
-# 3) Prompt for CURRENT MySQL ROOT password (if any), then NEW root password
+# 3) Prompt for MySQL root password (current & new)
 #############################################################################
 echo
 echo "------------------------------------------------------------"
 echo " MySQL root account setup "
 echo "------------------------------------------------------------"
-
 read -rsp "1) Enter CURRENT MySQL root password (leave blank if none): " MYSQL_CURRENT_ROOT_PW
 echo
 while true; do
@@ -127,7 +125,6 @@ echo
 echo "------------------------------------------------------------"
 echo " Project / Database setup "
 echo "------------------------------------------------------------"
-
 while true; do
   read -p "Enter a PROJECT NAME (letters/numbers/underscores only): " PROJECT_NAME
   if [[ "$PROJECT_NAME" =~ ^[A-Za-z0-9_]+$ ]]; then
@@ -139,7 +136,7 @@ done
 
 DB_NAME="$PROJECT_NAME"
 DB_USER="$PROJECT_NAME"
-# Generate a 16-character random password (base64, remove “=” “+” “/”)
+# Generate a 16-character random password (base64, remove '=+/' chars)
 DB_PASS="$(openssl rand -base64 12 | tr -d '=+/')"
 
 echo
@@ -156,13 +153,32 @@ echo "• DB password for user '$DB_USER': $DB_PASS"
 echo
 
 #############################################################################
+# 4b) Import schema.sql + dummy_data.sql into the new database
+#############################################################################
+if [[ -f "./sql/schema.sql" ]]; then
+  echo "→ Importing schema.sql into database '$DB_NAME'…"
+  mysql -uroot -p"$MYSQL_NEW_ROOT_PW" "$DB_NAME" < ./sql/schema.sql
+  echo "✔ schema.sql imported."
+else
+  echo "WARNING: ./sql/schema.sql not found—tables won’t be created."
+fi
+
+if [[ -f "./sql/dummy_data.sql" ]]; then
+  echo "→ Importing dummy_data.sql into database '$DB_NAME'…"
+  mysql -uroot -p"$MYSQL_NEW_ROOT_PW" "$DB_NAME" < ./sql/dummy_data.sql
+  echo "✔ dummy_data.sql imported."
+else
+  echo "WARNING: ./sql/dummy_data.sql not found—no initial data loaded."
+fi
+echo
+
+#############################################################################
 # 5) Prompt for DOMAIN (DNS) → copy files & write db.php
 #############################################################################
 echo
 echo "------------------------------------------------------------"
 echo " Project directory & db.php configuration "
 echo "------------------------------------------------------------"
-
 WEBROOT_PARENT="/var/www"
 DOC_ROOT="$WEBROOT_PARENT/$PROJECT_NAME"
 
@@ -183,7 +199,6 @@ else
 fi
 chown -R "$WWW_USER":"$WWW_GROUP" "$DOC_ROOT"
 chmod -R 755 "$DOC_ROOT"
-
 echo "✔ Files copied and permissions set to $WWW_USER:$WWW_GROUP."
 
 # Overwrite or create a fresh db.php with the new credentials
@@ -252,7 +267,7 @@ if ls /run/php/php*-fpm.sock &>/dev/null; then
 elif [[ -S "/run/php-fpm/www.sock" ]]; then
   PHP_FPM_SOCK="/run/php-fpm/www.sock"
 else
-  echo "ERROR: Could not locate a php-fpm socket (e.g. /run/php/php7.4-fpm.sock or /run/php-fpm/www.sock)."
+  echo "ERROR: Could not locate a php-fpm socket (e.g. /run/php/phpX.Y-fpm.sock or /run/php-fpm/www.sock)."
   exit 1
 fi
 
