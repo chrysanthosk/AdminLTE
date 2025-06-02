@@ -17,7 +17,6 @@ $user = currentUser($pdo);
 
   <!-- Sidebar -->
   <div class="sidebar">
-    <!-- Sidebar user (optional) -->
     <?php if ($user): ?>
       <div class="user-panel mt-3 pb-3 mb-3 d-flex">
         <div class="info">
@@ -31,9 +30,9 @@ $user = currentUser($pdo);
     <!-- Sidebar Menu -->
     <nav class="mt-2">
       <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu">
-        <!-- Dashboard -->
+        <!-- Dashboard (always visible) -->
         <li class="nav-item">
-          <a href="/pages/dashboard.php" class="nav-link">
+          <a href="<?php echo ($user && $user['role'] === 'admin') ? '/pages/dashboard.php' : '/pages/user_dashboard.php'; ?>" class="nav-link">
             <i class="nav-icon fas fa-tachometer-alt"></i>
             <p>Dashboard</p>
           </a>
@@ -53,6 +52,12 @@ $user = currentUser($pdo);
                 <a href="/pages/users.php" class="nav-link">
                   <i class="far fa-circle nav-icon"></i>
                   <p>User Administration</p>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="/pages/roles.php" class="nav-link">
+                  <i class="far fa-circle nav-icon"></i>
+                  <p>Role Management</p>
                 </a>
               </li>
               <li class="nav-item">

@@ -6,3 +6,7 @@ INSERT INTO users (username, email, password_hash, role, first_name, last_name, 
 
 INSERT INTO email_settings (smtp_host, smtp_port, smtp_user, smtp_pass, smtp_secure) VALUES
 ('smtp.example.com', '587', 'user@example.com', 'securepassword', 'tls');
+
+INSERT INTO roles (role_name, role_desc) VALUES
+  ('admin', 'Full access, managing users and roles'),
+  ('user', 'Standard user with limited access');
