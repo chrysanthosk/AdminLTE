@@ -1,7 +1,7 @@
 <?php
 // users.php - list and manage users
 require_once '../auth.php';
-requireAdmin();
+requirePermission($pdo, 'user.manage');
 
 if (isset($_GET['delete_id'])) {
     $stmt = $pdo->prepare('DELETE FROM users WHERE id = ?');

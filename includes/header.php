@@ -1,8 +1,9 @@
 <?php
 // includes/header.php — top section including CSS and Navbar
+require_once __DIR__ . '/../auth.php';
 
-$user = currentUser($pdo);
-$theme = $user ? $user['theme'] : 'light';
+$user      = currentUser($pdo);
+$theme     = $user ? $user['theme'] : 'light';
 $page_title = isset($page_title) ? $page_title : '';
 ?>
 <!DOCTYPE html>
@@ -25,10 +26,6 @@ $page_title = isset($page_title) ? $page_title : '';
   <?php endif; ?>
 </head>
 
-<!--
-  We add ‘dark-mode’ only if $theme === 'dark'.
-  ‘sidebar-mini’ is unchanged.
--->
 <body class="hold-transition sidebar-mini <?php echo ($theme === 'dark') ? 'dark-mode' : ''; ?>">
 <div class="wrapper">
   <!-- Navbar -->
@@ -40,17 +37,26 @@ $page_title = isset($page_title) ? $page_title : '';
     <!-- Left navbar links -->
     <ul class="navbar-nav">
       <li class="nav-item">
-        <a class="nav-link" data-widget="pushmenu" href="#"><i class="fas fa-bars"></i></a>
+        <a class="nav-link" data-widget="pushmenu" href="#">
+          <i class="fas fa-bars"></i>
+        </a>
       </li>
       <li class="nav-item d-none d-sm-inline-block">
-        <a href="/index.php" class="nav-link">Home</a>
+        <!-- Here is the role check: -->
+        <?php if ($user && $user['role'] === 'admin'): ?>
+          <a href="/pages/dashboard.php" class="nav-link">Admin Panel</a>
+        <?php else: ?>
+          <a href="/pages/user_dashboard.php" class="nav-link">Home</a>
+        <?php endif; ?>
       </li>
     </ul>
 
     <!-- Right navbar links -->
     <ul class="navbar-nav ml-auto">
       <li class="nav-item">
-        <a class="nav-link" href="/logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
+        <a class="nav-link" href="/logout.php">
+          <i class="fas fa-sign-out-alt"></i> Logout
+        </a>
       </li>
     </ul>
   </nav>

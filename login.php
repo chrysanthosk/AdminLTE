@@ -1,5 +1,6 @@
 <?php
 // login.php — user login with optional 2FA
+
 require_once 'auth.php';
 require_once 'GoogleAuthenticator.php';
 
@@ -9,11 +10,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password = $_POST['password'];
     $code     = $_POST['code'] ?? '';
 
+    // Fetch user record by email
     $stmt = $pdo->prepare('SELECT * FROM users WHERE email = ?');
     $stmt->execute([$email]);
     $user = $stmt->fetch();
 
     if ($user && password_verify($password, $user['password_hash'])) {
+        // If 2FA is enabled, verify code
         if ($user['twofa_enabled']) {
             if (empty($code)) {
                 $error = 'Please enter the 2FA code.';
@@ -23,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_SESSION['user_id'] = $user['id'];
                     $_SESSION['role']    = $user['role'];
                     logAction($pdo, $user['id'], 'Logged in with 2FA');
-                    // Redirect based on role:
+                    // Redirect based on role
                     if ($user['role'] === 'admin') {
                         header('Location: pages/dashboard.php');
                     } else {
@@ -35,6 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         } else {
+            // No 2FA: log in immediately
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['role']    = $user['role'];
             logAction($pdo, $user['id'], 'Logged in');
@@ -67,7 +71,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body class="hold-transition login-page">
 
 <div class="login-box">
-  <!-- ... (toggle and form are unchanged) -->
+  <div class="login-logo">
+    <a href="#"><b>Admin</b>Panel</a>
+  </div>
+
   <div class="card">
     <div class="card-header text-center">
       <div class="custom-control custom-switch">
@@ -75,11 +82,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <label class="custom-control-label" for="theme-switch">Dark Mode</label>
       </div>
     </div>
+
     <div class="card-body login-card-body">
       <p class="login-box-msg">Sign in to start your session</p>
+
       <?php if ($error): ?>
         <div class="alert alert-danger"><?php echo $error; ?></div>
       <?php endif; ?>
+
       <form action="/login.php" method="post">
         <div class="input-group mb-3">
           <input type="email" name="email" class="form-control" placeholder="Email" required>
@@ -87,18 +97,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="input-group-text"><span class="fas fa-envelope"></span></div>
           </div>
         </div>
+
         <div class="input-group mb-3">
           <input type="password" name="password" class="form-control" placeholder="Password" required>
           <div class="input-group-append">
             <div class="input-group-text"><span class="fas fa-lock"></span></div>
           </div>
         </div>
+
         <div class="input-group mb-3">
           <input type="text" name="code" class="form-control" placeholder="2FA Code (if enabled)">
           <div class="input-group-append">
             <div class="input-group-text"><span class="fas fa-key"></span></div>
           </div>
         </div>
+
         <div class="row">
           <div class="col-8">
             <a href="forgot_password.php">I forgot my password</a>
@@ -112,10 +125,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   </div>
 </div>
 
-<!-- JS (unchanged) -->
+<!-- jQuery -->
 <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+<!-- Bootstrap 4 -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
+<!-- AdminLTE App -->
 <script src="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/js/adminlte.min.js"></script>
+
 <script>
 document.addEventListener('DOMContentLoaded', () => {
   const switchEl = document.getElementById('theme-switch');

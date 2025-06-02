@@ -38,11 +38,19 @@ CREATE TABLE IF NOT EXISTS roles (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- (Optional) If you want to store permissions later, you could add:
+CREATE TABLE IF NOT EXISTS permissions (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  permission_key VARCHAR(100) UNIQUE NOT NULL,
+  description VARCHAR(255),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS role_permissions (
   id INT AUTO_INCREMENT PRIMARY KEY,
   role_id INT NOT NULL,
-  permission_key VARCHAR(100) NOT NULL,
+  permission_id INT NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+  FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE,
+  FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE,
+  UNIQUE KEY unique_role_perm (role_id, permission_id)
 );

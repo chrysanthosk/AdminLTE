@@ -1,7 +1,8 @@
 <?php
 // dashboard.php - admin dashboard
 require_once '../auth.php';
-requireAdmin();
+requirePermission($pdo, 'user.manage');
+
 $user = currentUser($pdo);
 $page_title = 'Dashboard';
 ?>

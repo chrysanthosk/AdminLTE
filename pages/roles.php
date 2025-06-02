@@ -2,7 +2,7 @@
 // pages/roles.php — Role Management (admin only)
 
 require_once '../auth.php';
-requireAdmin(); // only admins can manage roles
+requirePermission($pdo, 'role.manage');
 
 // Handle Create / Update
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -94,6 +94,11 @@ $page_title = 'Role Management';
                   onclick="return confirm('Delete this role?');">
                   <i class="fas fa-trash"></i> Delete
                 </a>
+                  <?php if (hasPermission($pdo, 'role.assign')): ?>
+                    <a href="role_permissions.php?role_id=<?php echo $r['id']; ?>" class="btn btn-sm btn-secondary">
+                        <i class="fas fa-key"></i> Permissions
+                    </a>
+                <?php endif; ?>
               </td>
             </tr>
           <?php endforeach; ?>

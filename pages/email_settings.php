@@ -1,7 +1,7 @@
 <?php
 // email_settings.php - configure SMTP settings
 require_once '../auth.php';
-requireAdmin();
+requirePermission($pdo, 'email.manage');
 
 $stmt = $pdo->query('SELECT * FROM email_settings LIMIT 1');
 $settings = $stmt->fetch();

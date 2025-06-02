@@ -10,3 +10,27 @@ INSERT INTO email_settings (smtp_host, smtp_port, smtp_user, smtp_pass, smtp_sec
 INSERT INTO roles (role_name, role_desc) VALUES
   ('admin', 'Full access, managing users and roles'),
   ('user', 'Standard user with limited access');
+
+  INSERT IGNORE INTO permissions (permission_key, description) VALUES
+    ('user.manage',  'Create/Edit/Delete Users'),
+    ('role.manage',  'Create/Edit/Delete Roles'),
+    ('email.manage', 'Configure Email/SMTP Settings'),
+    ('audit.view',   'View Audit Log'),
+    ('profile.edit', 'Edit Own Profile'),
+    ('role.assign', 'Assign Permissions to Roles');
+
+  -- Assign some default permissions to “admin” role (role_id=1 if that was seeded earlier)
+  INSERT IGNORE INTO role_permissions (role_id, permission_id)
+    SELECT r.id, p.id
+    FROM roles r
+    JOIN permissions p
+      ON p.permission_key IN ('user.manage','role.manage','email.manage','audit.view','profile.edit','role.assign')
+    WHERE r.role_name = 'admin';
+
+  -- Optionally give “user” role only the “profile.edit” permission:
+  INSERT IGNORE INTO role_permissions (role_id, permission_id)
+    SELECT r.id, p.id
+    FROM roles r
+    JOIN permissions p
+      ON p.permission_key = 'profile.edit'
+    WHERE r.role_name = 'user';
