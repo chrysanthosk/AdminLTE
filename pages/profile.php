@@ -1,6 +1,8 @@
 <?php
 // profile.php - user profile page
 require_once '../auth.php';
+require_once '../GoogleAuthenticator.php';
+
 requireLogin();
 $user = currentUser($pdo);
 
