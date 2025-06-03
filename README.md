@@ -53,12 +53,12 @@ All features are accessed through a single `dashboard.php`, with displayed widge
     - **Email Settings** page to configure SMTP and test via PHPMailer.
 - **Audit Log**: Tracks user actions (e.g., creating roles, updating settings).
 - **2FA**: Google Authenticator integration for optional two-factor authentication.
-- **Install Script**: `install.sh` automates server setup, DB creation, `db.php` generation, Nginx config, SSL, Composer, and PHPMailer installation.
+- **Install Script**: `install.sh` automates server setup, DB creation, `db.php` generation, Nginx config, SSL, Composer, and PHPMailer installation across Debian/Ubuntu and RHEL/CentOS/Fedora.
 
 ## Requirements
-- Debian/Ubuntu-based Linux
+- Debian/Ubuntu or RHEL/CentOS/Fedora-based Linux
 - Nginx (default site disabled)
-- MySQL server
+- MySQL (or MariaDB) server
 - PHP 8.3 with extensions: `fpm`, `mysql`, `mbstring`, `xml`, `zip`, `curl`
 - Composer
 - OpenSSL (for random DB password generation)
@@ -74,19 +74,19 @@ All features are accessed through a single `dashboard.php`, with displayed widge
   ```
 
 ### 2. Run install.sh
-Execute `install.sh` with root privileges:
+Execute `install.sh` with root or sudo privileges:
 ```bash
 sudo ./install.sh
 ```
 It will:
-1. Detect Debian/Ubuntu and install Nginx, MySQL, PHP, and required extensions.
-2. Prompt you to set the MySQL root password.
+1. Detect your Linux distribution (Debian/Ubuntu or RHEL/CentOS/Fedora) and install Nginx, MySQL/MariaDB, PHP, and required extensions via `apt`, `yum`, or `dnf`.
+2. Prompt you to set the MySQL/MariaDB root password.
 3. Ask for a project name (e.g., `adminlte`), create a database `${PROJECT_NAME}_db` and user `${PROJECT_NAME}_user` with a random password.
 4. Generate `db.php` in `/var/www/${PROJECT_NAME}/db.php`.
-5. Copy all project files (excluding `install.sh` and `sql/`) to `/var/www/${PROJECT_NAME}`, set proper permissions.
+5. Copy all project files (excluding `install.sh`, `sql/`, and `vendor/`) to `/var/www/${PROJECT_NAME}`, set proper permissions.
 6. Prompt for a DNS/domain (e.g., `adminlte.example.com`) and SSL cert/key locations, then configure Nginx with HTTP→HTTPS redirect and HTTPS site.
-7. Reload Nginx and PHP-FPM.
-8. Install Composer (if missing) and `composer require phpmailer/phpmailer` in the project root.
+7. Reload or restart Nginx, PHP-FPM, and MySQL/MariaDB.
+8. Install Composer (if missing) and run `composer require phpmailer/phpmailer` in the project root.
 9. Print out DB credentials and project URL.
 
 ### 3. Verify Installation
@@ -270,7 +270,7 @@ CREATE TABLE audit_log (
 - **Nginx logs**:
     - Access: `/var/log/nginx/${PROJECT_NAME}-access.log`
     - Error: `/var/log/nginx/${PROJECT_NAME}-error.log`
-- **PHP-FPM logs**: Default at `/var/log/php8.3-fpm.log` or similar.
+- **PHP-FPM logs**: Default at `/var/log/php-fpm/*` or `/var/log/php8.3-fpm.log`.
 - **Audit Log** page (`audit_log.php`) shows actions logged by `logAction($pdo, user_id, message)`.
 
 ## License
