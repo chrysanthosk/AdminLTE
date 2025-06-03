@@ -1,352 +1,277 @@
-# AdminLTE PHP Admin Panel
-
-A full-stack PHP/MySQL admin panel built with AdminLTE. This repository includes:
-
-- User authentication (login, logout, forgot password)
-- Role-based admin dashboard
-- User CRUD (Create, Read, Update, Delete)
-- User profile page (name, email, password, 2FA, theme)
-- Email/SMTP settings page
-- Audit log of user actions
-- Two-Factor Authentication (Google Authenticator)
-- `install.sh` to automate server setup (Nginx, PHP-FPM, MySQL) and project configuration
-
----
+# AdminLTE PHP/MySQL Dashboard
+A fully-featured administrative dashboard built on AdminLTE, PHP, and MySQL with robust Role-Based Access Control (RBAC), modular dashboard widgets, and SMTP testing functionality.
 
 ## Table of Contents
-
-- [Features](#features)
-- [Prerequisites](#prerequisites)
-- [Repository Structure](#repository-structure)
-- [Installation](#installation)
-    - [1. Clone the Repository](#1-clone-the-repository)
-    - [2. Make `install.sh` Executable](#2-make-installsh-executable)
-    - [3. Run the Installer](#3-run-the-installer)
-    - [4. Finalize DNS & SSL](#4-finalize-dns--ssl)
-- [Database Schema & Dummy Data](#database-schema--dummy-data)
-- [Usage](#usage)
-    - [Admin Login](#admin-login)
-    - [Dashboard](#dashboard)
-    - [User Administration](#user-administration)
-    - [Profile Page](#profile-page)
+1. [Overview](#overview)
+2. [Features](#features)
+3. [Requirements](#requirements)
+4. [Installation](#installation)
+    - [1. Clone or Upload Project](#1-clone-or-upload-project)
+    - [2. Run install.sh](#2-run-installsh)
+    - [3. Verify Installation](#3-verify-installation)
+5. [Configuration](#configuration)
+    - [Database (`db.php`)](#database-dbphp)
     - [Email Settings](#email-settings)
-    - [Audit Log](#audit-log)
-- [Customizations](#customizations)
-- [Troubleshooting](#troubleshooting)
-- [License](#license)
+6. [Database Schema](#database-schema)
+    - [Users & Authentication](#users--authentication)
+    - [RBAC Tables](#rbac-tables)
+    - [Modules Table](#modules-table)
+    - [Email Settings Table](#email-settings-table)
+    - [Audit Log Table](#audit-log-table)
+7. [Project Structure](#project-structure)
+8. [Usage](#usage)
+    - [Login & Dashboard](#login--dashboard)
+    - [Roles & Permissions](#roles--permissions)
+    - [Modules Management](#modules-management)
+    - [Email Settings & SMTP Test](#email-settings--smtp-test)
+9. [Customizing](#customizing)
+10. [Support & Logs](#support--logs)
+11. [License](#license)
 
----
+## Overview
+This project provides a pre-built administrative interface using AdminLTE for the frontend and PHP/MySQL for the backend. It supports:
+- **User Authentication** (login, logout, forgot password)
+- **Role-Based Access Control (RBAC)** (roles, permissions, role_permission assignments)
+- **Dynamic Dashboard Widgets** via a `modules` table
+- **Email Settings** with SMTP test functionality using PHPMailer
+- **Audit Logging** for critical actions.
+- **Two-Factor Authentication (2FA)** via Google Authenticator
+
+All features are accessed through a single `dashboard.php`, with displayed widgets depending on the logged-in user’s permissions.
 
 ## Features
+- **Single Dashboard**: All users go to `dashboard.php`; widgets render dynamically based on permissions.
+- **RBAC**:
+    - **roles** table stores roles (e.g., `admin`, `user`, `manager`).
+    - **permissions** table stores permission keys (e.g., `user.manage`, `role.manage`).
+    - **role_permissions** links roles ↔ permissions.
+- **Modules**:
+    - A `modules` table defines dashboard widgets (title, description, icon, color, link, permission_key, sort_order, is_active).
+    - **Modules Management** page to CRUD modules and toggle active/inactive.
+- **Email Settings**:
+    - A `email_settings` table holds SMTP host, port, username, password, secure (`tls`/`ssl`), `from_email`, and `from_name`.
+    - **Email Settings** page to configure SMTP and test via PHPMailer.
+- **Audit Log**: Tracks user actions (e.g., creating roles, updating settings).
+- **2FA**: Google Authenticator integration for optional two-factor authentication.
+- **Install Script**: `install.sh` automates server setup, DB creation, `db.php` generation, Nginx config, SSL, Composer, and PHPMailer installation.
 
-1. **Authentication**
-    - Login / Logout
-    - “Forgot Password” placeholder page (no email logic by default)
-    - Two-Factor Authentication via Google Authenticator
-2. **Admin Dashboard**
-    - Overview cards linking to Users, Email Settings, Audit Log
-3. **User CRUD**
-    - Add, edit, delete users (admin only)
-    - Assign roles (`admin` or `user`)
-    - Manage user name, email, theme, 2FA
-4. **User Profile**
-    - Change name, email, password
-    - Enable/disable 2FA (QR code generation)
-    - Toggle between Light / Dark theme
-5. **Email Settings**
-    - Store SMTP host, port, username, password, encryption method
-    - Saved in `email_settings` table
-6. **Audit Log**
-    - Logs user actions (login, logout, add/edit/delete user, profile/email updates)
-    - Viewable under “Admin → Audit Log”
-7. **Automated Installer (`install.sh`)**
-    - Detects Ubuntu/Debian or CentOS/RHEL
-    - Installs Nginx, MySQL/MariaDB, PHP-FPM, PHP-MySQL extension
-    - Prompts to set MySQL root password
-    - Prompts for project name, auto-creates DB and MySQL user with random password
-    - Updates `db.php` with new credentials
-    - Prompts for domain name and SSL certificate paths, writes Nginx vhost with per-project logs
-    - Copies project files into `/var/www/<project_name>` (owned by webserver user)
-
----
-
-## Prerequisites
-
-- A fresh or minimal Linux server (Ubuntu 20.04+, Debian 10+, CentOS 7+/RHEL 7+)
-- **Root** or **sudo** privileges
-- Valid SSL certificate and key files (PEM format) for your domain
-- DNS A/AAAA record pointing your chosen domain (e.g. `example.com`) to the server’s IP
-
----
-
-## Repository Structure
-
-```
-└── adminlte_project/
-    ├── install.sh                ← Automated installer script
-    ├── db.php                    ← Database connection (PDO)
-    ├── auth.php                  ← Session & authentication helpers
-    ├── GoogleAuthenticator.php   ← Minimal PHP TOTP class
-    ├── index.php                 ← Redirects to login or dashboard
-    ├── login.php                 
-    ├── logout.php
-    ├── forgot_password.php
-    │
-    ├── includes/
-    │   ├── header.php            ← <head> + Navbar + theme logic
-    │   ├── sidebar.php           ← AdminLTE sidebar menu (role-aware)
-    │   └── footer.php            ← JS includes + footer
-    │
-    ├── pages/
-    │   ├── dashboard.php         ← Admin dashboard overview
-    │   ├── users.php             ← List & manage users (admin only)
-    │   ├── add_user.php          ← Create new user form
-    │   ├── edit_user.php         ← Edit existing user form
-    │   ├── profile.php           ← Logged-in user’s profile
-    │   ├── email_settings.php    ← SMTP settings form (admin only)
-    │   └── audit_log.php         ← View audit logs (admin only)
-    │
-    └── sql/
-        ├── schema.sql            ← MySQL schema (creates DB, tables, constraints)
-        └── dummy_data.sql        ← Inserts initial data (admin/admin123, sample user & email_settings)
-```
-
-> **Note**: When `install.sh` runs, it copies everything except `install.sh` and the `sql/` folder into `/var/www/<project_name>/`.
-
----
+## Requirements
+- Debian/Ubuntu-based Linux
+- Nginx (default site disabled)
+- MySQL server
+- PHP 8.3 with extensions: `fpm`, `mysql`, `mbstring`, `xml`, `zip`, `curl`
+- Composer
+- OpenSSL (for random DB password generation)
+- Access to SSL certificates (PEM format)
 
 ## Installation
 
-### 1. Clone the Repository
+### 1. Clone or Upload Project
+- Place your project source files (including `install.sh`, `pages/`, `includes/`, etc.) on the server.
+- Ensure `install.sh` has execute permissions:
+  ```bash
+  chmod +x install.sh
+  ```
 
-```bash
-git clone https://github.com/yourusername/your-repo.git
-cd your-repo
-```
-
-### 2. Make `install.sh` Executable
-
-```bash
-chmod +x install.sh
-```
-
-### 3. Run the Installer
-
+### 2. Run install.sh
+Execute `install.sh` with root privileges:
 ```bash
 sudo ./install.sh
 ```
+It will:
+1. Detect Debian/Ubuntu and install Nginx, MySQL, PHP, and required extensions.
+2. Prompt you to set the MySQL root password.
+3. Ask for a project name (e.g., `adminlte`), create a database `${PROJECT_NAME}_db` and user `${PROJECT_NAME}_user` with a random password.
+4. Generate `db.php` in `/var/www/${PROJECT_NAME}/db.php`.
+5. Copy all project files (excluding `install.sh` and `sql/`) to `/var/www/${PROJECT_NAME}`, set proper permissions.
+6. Prompt for a DNS/domain (e.g., `adminlte.example.com`) and SSL cert/key locations, then configure Nginx with HTTP→HTTPS redirect and HTTPS site.
+7. Reload Nginx and PHP-FPM.
+8. Install Composer (if missing) and `composer require phpmailer/phpmailer` in the project root.
+9. Print out DB credentials and project URL.
 
-The script will prompt you for:
+### 3. Verify Installation
+- Visit `https://${PROJECT_DOMAIN}` in your browser.
+- You should see the login page (`login.php`) styled by AdminLTE.
 
-1. **Current MySQL root password** (if any)
-2. **New MySQL root password** (and confirmation)
-3. **Project name** (alphanumeric + underscores only)
-4. **Domain name** (e.g. `example.com`)
-5. **Absolute paths to your SSL certificate and key**
+## Configuration
 
-Behind the scenes, it will:
+### Database (`db.php`)
+Located at `/var/www/${PROJECT_NAME}/db.php`:
+```php
+<?php
+\$db_host   = 'localhost';
+\$db_name   = 'project_db';
+\$db_user   = 'project_user';
+\$db_pass   = 'random_password';
+\$db_charset = 'utf8mb4';
 
-- Install Nginx, MySQL/MariaDB, PHP-FPM, and PHP-MySQL
-- Configure MySQL root password
-- Create a new database and a new MySQL user (same as project name) with a random password
-- Update `/var/www/<project_name>/db.php` with the new credentials
-- Copy all project files into `/var/www/<project_name>/`
-- Chown files to the webserver user (`www-data` on Debian/Ubuntu, `nginx` on CentOS/RHEL)
-- Create an Nginx vhost at `/etc/nginx/sites-available/<project_name>` that:
-    - Redirects HTTP → HTTPS
-    - Serves PHP via the discovered PHP-FPM socket
-    - Uses per-project logs:
-        - `/var/log/nginx/<project_name>-access.log`
-        - `/var/log/nginx/<project_name>-error.log`
-- Enable the site, disable the default site, reload Nginx, restart PHP-FPM & MySQL
+\$dsn = "mysql:host=\$db_host;dbname=\$db_name;charset=\$db_charset";
+\$options = [
+    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+    PDO::ATTR_EMULATE_PREPARES   => false,
+];
 
-At the end, you’ll see a summary like:
-
+try {
+    \$pdo = new PDO(\$dsn, \$db_user, \$db_pass, \$options);
+} catch (\PDOException \$e) {
+    throw new \PDOException(\$e->getMessage(), (int)\$e->getCode());
+}
+?>
 ```
-INSTALLATION COMPLETE
-Project URL:  https://example.com
+Modify this only if you move the database or need different credentials.
 
-MySQL credentials for this project:
-  • Database:        myproject
-  • MySQL username:  myproject
-  • MySQL password:  AbC123XyZ...
+### Email Settings
+Navigate to **Admin → Email Settings** (`pages/email_settings.php`):
+- **SMTP Host**: e.g., `smtp.example.com`
+- **SMTP Port**: e.g., `587`
+- **SMTP Username**: e.g., `user@example.com`
+- **SMTP Password**: the user’s SMTP password
+- **SMTP Secure**: `tls` or `ssl`
+- **From Email Address**: the “From” address for outgoing mail (required)
+- **Send Name**: the display name for outgoing mail (required)
 
-db.php was updated under /var/www/myproject/db.php
-Document root: /var/www/myproject
-Nginx logs: /var/log/nginx/myproject-access.log  and  /var/log/nginx/myproject-error.log
+To test:
+1. Enter a valid **“Test Email Address”**.
+2. Click **“Test SMTP”**. PHPMailer will attempt to send the test email.
+
+Saved settings persist in the `email_settings` table.
+
+## Database Schema
+
+### Users & Authentication
+- **users** (`id`, `first_name`, `last_name`, `email`, `password_hash`, `role`, `twofa_enabled`, `twofa_secret`, `theme`, `created_at`)
+- **roles** (`id`, `role_name`, `created_at`)
+- **role_permissions** (`role_id`, `permission_id`)
+- **permissions** (`id`, `permission_key`, `description`, `created_at`)
+- **audit_log** (`id`, `user_id`, `action`, `timestamp`)
+
+### Modules Table
+```sql
+CREATE TABLE modules (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(100) NOT NULL,
+  description VARCHAR(255) NOT NULL,
+  icon_class VARCHAR(100) NOT NULL,
+  box_color VARCHAR(50) NOT NULL,
+  link VARCHAR(255) NOT NULL,
+  permission_key VARCHAR(100) NOT NULL,
+  sort_order INT NOT NULL DEFAULT 0,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 ```
+- Defines dashboard widgets dynamically.
+- Managed via **Admin → Modules** (`pages/modules.php`).
 
-### 4. Finalize DNS & SSL
+### Email Settings Table
+```sql
+CREATE TABLE email_settings (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  smtp_host VARCHAR(255) NOT NULL,
+  smtp_port INT NOT NULL,
+  smtp_user VARCHAR(255) NOT NULL,
+  smtp_pass VARCHAR(255) NOT NULL,
+  smtp_secure VARCHAR(10) NOT NULL,
+  from_email VARCHAR(255) NOT NULL,
+  from_name VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+```
+- Stores SMTP configuration and default From address/name.
+- Used by `email_settings.php` to send test emails.
 
-1. Ensure your DNS record (A/AAAA) points `example.com` (or your chosen domain) to this server’s IP.
-2. Verify that your SSL certificate (`.crt`) and key (`.key`) files exist and are valid.
-3. Browse to `https://example.com` to see the login page.
+### Audit Log Table
+```sql
+CREATE TABLE audit_log (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  action VARCHAR(255) NOT NULL,
+  timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+```
+- Logs critical user actions (e.g., permission changes, module edits).
 
----
-
-## Database Schema & Dummy Data
-
-If you prefer to set up the database manually instead of using `install.sh`, you can import:
-
-1. **`sql/schema.sql`**
-   ```sql
-   CREATE DATABASE IF NOT EXISTS admin_panel
-     CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
-   USE admin_panel;
-
-   CREATE TABLE IF NOT EXISTS users (
-     id INT AUTO_INCREMENT PRIMARY KEY,
-     username VARCHAR(50) UNIQUE NOT NULL,
-     email VARCHAR(100) UNIQUE NOT NULL,
-     password_hash VARCHAR(255) NOT NULL,
-     role ENUM('admin', 'user') DEFAULT 'user',
-     first_name VARCHAR(50),
-     last_name VARCHAR(50),
-     theme ENUM('light', 'dark') DEFAULT 'light',
-     twofa_enabled TINYINT(1) DEFAULT 0,
-     twofa_secret VARCHAR(255),
-     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-   );
-
-   CREATE TABLE IF NOT EXISTS email_settings (
-     id INT AUTO_INCREMENT PRIMARY KEY,
-     smtp_host VARCHAR(255),
-     smtp_port VARCHAR(10),
-     smtp_user VARCHAR(100),
-     smtp_pass VARCHAR(100),
-     smtp_secure VARCHAR(10)
-   );
-
-   CREATE TABLE IF NOT EXISTS audit_logs (
-     id INT AUTO_INCREMENT PRIMARY KEY,
-     user_id INT,
-     action TEXT,
-     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
-   );
-   ```
-
-2. **`sql/dummy_data.sql`**
-   ```sql
-   USE admin_panel;
-
-   INSERT INTO users (username, email, password_hash, role, first_name, last_name, theme, twofa_enabled, twofa_secret) VALUES
-   ('admin', 'admin@example.com', '<hashed_admin123>', 'admin', 'Admin', 'User', 'light', 0, NULL),
-   ('user1', 'user1@example.com', '<hashed_user1pass>', 'user', 'User', 'One', 'light', 0, NULL);
-
-   INSERT INTO email_settings (smtp_host, smtp_port, smtp_user, smtp_pass, smtp_secure) VALUES
-   ('smtp.example.com', '587', 'user@example.com', 'securepassword', 'tls');
-   ```
-
-> **Note**: Replace `<hashed_admin123>` and `<hashed_user1pass>` with real bcrypt hashes if you import manually. When running `install.sh`, the script already inserts:
-> - Admin user: `admin@example.com` / `admin123` (hashed automatically)
-> - A sample user “user1” / `user1pass` (hashed automatically)
-> - Default email settings entry
-
----
+## Project Structure
+```
+/project-root
+├── includes
+│   ├── auth.php         # Authentication helper (currentUser(), requirePermission())
+│   ├── header.php       # Navbar and theme handling
+│   ├── sidebar.php      # Sidebar with permission-based links
+│   └── footer.php
+├── pages
+│   ├── login.php
+│   ├── register.php
+│   ├── forgot_password.php
+│   ├── dashboard.php     # Unified, permission-driven dashboard
+│   ├── users.php         # CRUD for users (permission: user.manage)
+│   ├── roles.php         # CRUD for roles (permission: role.manage)
+│   ├── role_permissions.php  # Assign permissions to roles (permission: role.assign)
+│   ├── permissions.php      # CRUD for permissions (permission: permission.manage)
+│   ├── modules.php          # CRUD for modules (permission: module.manage)
+│   ├── email_settings.php   # Configure SMTP & test (permission: email.manage)
+│   ├── audit_log.php        # View audit logs (permission: audit.view)
+│   └── profile.php          # User profile (permission: profile.edit)
+├── vendor                # Composer-installed dependencies (PHPMailer, etc.)
+├── db.php                # Auto-generated by install.sh
+├── install.sh            # Installation and setup script
+├── README.md             # This file
+└── .env (optional)       # For environment variables (if used)
+```
 
 ## Usage
 
-### Admin Login
+### Login & Dashboard
+1. Go to `https://${PROJECT_DOMAIN}/login.php`.
+2. **Admins** see all dashboard widgets (Users, Roles, Role Perms, Permissions, Modules, Email, Logs).
+3. **Non-admins** see a welcome card and can edit their own profile under **Profile**.
 
-- Open `https://<your-domain>/login.php`
-- Default administrator account (as created by `install.sh`):
-    - **Email**: `admin@example.com`
-    - **Password**: `admin123`
-- You can change this later via the **User Administration** screen.
+### Roles & Permissions
+- **Roles** page (`roles.php`): Create or rename roles.
+- **Permissions** page (`permissions.php`): Create/edit/delete permission keys (e.g., `user.manage`, `module.manage`).
+- **Role Permissions** page (`role_permissions.php`): Assign which permissions each role has.
+- New roles automatically appear in **Role Management**.
 
-### Dashboard
+### Modules Management
+- Go to **Admin → Modules** (`pages/modules.php`).
+- List of all modules (ID, Title, Description, Icon, Box Color, Link, Permission Key, Sort Order, Status).
+- Click **Add Module** to create a new dashboard widget (choose icon, color, link, permission, order, active).
+- Click **Edit** to modify an existing module’s properties, including Active/Inactive.
+- Click **Delete** to remove a module.
+- Only modules with `permission_key` that the current user has (and marked `is_active = TRUE`) appear on the dashboard.
 
-- After logging in as an admin, you’ll see the AdminLTE dashboard with “small boxes” linking to:
-    - **Users**
-    - **Email Settings**
-    - **Audit Log**
+### Email Settings & SMTP Test
+- Navigate to **Admin → Email Settings** (`pages/email_settings.php`).
+- Enter SMTP Host, Port, Username, Password, Secure (tls/ssl), **From Email**, and **Send Name**.
+- **Save Settings** stores them in `email_settings`.
+- Enter **Test Email Address** and click **Test SMTP** → PHPMailer attempts to send a test email using saved credentials, From Email, and Send Name.
+- A success/failure message appears at the top.
 
-### User Administration
+## Customizing
+- **Adding a new dashboard widget**:
+    1. Create a new permission key in **Permissions** (e.g., `report.view`).
+    2. Assign it to a role in **Role Permissions**.
+    3. Go to **Modules**, click **Add Module**, and set:
+        - Title: e.g. “Reports”
+        - Description: e.g. “View Reports”
+        - Icon Class: choose a Font Awesome option (e.g. `fas fa-chart-bar`)
+        - Box Color: choose `bg-info`, `bg-success`, etc.
+        - Link: e.g. `reports.php`
+        - Permission Key: `report.view`
+        - Sort Order: numeric order
+        - Status: Active
+    4. Save. The new widget appears on the dashboard for roles with `report.view`.
 
-- Go to **Admin → User Administration** (sidebar menu).
-- You can view all users in a table, add new users, edit existing users (change role, name, email, theme, password, 2FA), or delete users.
-- Every action is logged to `audit_logs`.
+- **Locking down pages**: Add `requirePermission($pdo, '<permission.key>');` at the top of any new page to restrict access.
 
-### Profile Page
-
-- Click your name in the sidebar (below the AdminLTE logo) to open **My Profile**.
-- Update your first/last name, email, and theme (Light/Dark).
-- Change password by entering a new password (or leave blank to keep current).
-- Enable Two-Factor Authentication:
-    1. Check “Enable 2FA”.
-    2. If you have no existing secret, a new secret is generated and a QR code is displayed.
-    3. Scan the QR code with Google Authenticator (or Authy).
-    4. On your next login, you’ll be prompted for a 2FA code.
-
-### Email Settings
-
-- Go to **Admin → Email Settings**.
-- Enter your SMTP host, port, username, password, and “Secure” (tls/ssl).
-- Save to store these values in the `email_settings` table.
-- You can integrate email functionality (e.g., password resets) by loading these values in your mailer.
-
-### Audit Log
-
-- Go to **Admin → Audit Log**.
-- View a reverse-chronological table of all logged actions (user logins, logouts, profile or user updates, email settings changes, deletions, etc.).
-- Each entry shows: ID, User (username), Action description, Timestamp.
-
----
-
-## Customizations
-
-1. **Change the Default Admin Credentials**
-    - Edit the `dummy_data.sql` before importing, or create/modify the admin account via **User Administration**.
-2. **Modify Database Connection**
-    - The installer sets credentials in `/var/www/<project>/db.php`.
-    - If you rename/move your database later, update `$host`, `$db`, `$user`, `$pass` accordingly.
-3. **Adjust Nginx Settings**
-    - The auto-generated vhost lives at `/etc/nginx/sites-available/<project_name>`.
-    - To tweak PHP-FPM socket or add custom rewrites, edit that file and run `sudo nginx -t && sudo systemctl reload nginx`.
-4. **Add More Fields to `users` Table**
-    - Update `sql/schema.sql` and re-run migrations (or alter table manually).
-    - Modify the PHP forms (`add_user.php`, `edit_user.php`, `profile.php`) to include new fields.
-5. **Enable Real “Forgot Password” Emails**
-    - Integrate a mailer library (e.g. PHPMailer) using credentials stored in `email_settings` table.
-    - Implement token‐based reset links and a reset form.
-
----
-
-## Troubleshooting
-
-- **Nginx Fails to Start/Reload**
-    1. Check syntax: `sudo nginx -t`.
-    2. Inspect logs:
-        - `/var/log/nginx/error.log` (global)
-        - `/var/log/nginx/<project_name>-error.log` (project-specific)
-    3. Confirm SSL files exist and have correct permissions.
-- **PHP Pages Show “502 Bad Gateway”**
-    - Ensure PHP-FPM is running:
-      ```bash
-      sudo systemctl status php*-fpm       # apt (e.g. php7.4-fpm)
-      sudo systemctl status php-fpm         # yum/dnf
-      ```  
-    - Confirm the socket path in Nginx vhost matches `/run/php/...` or `/run/php-fpm/www.sock`.
-- **Cannot Connect to MySQL**
-    - Verify `db.php` credentials match what you set during install.
-    - Test manually:
-      ```bash
-      mysql -u<db_user> -p'<db_pass>' -h localhost < <(echo "SHOW DATABASES;")
-      ```  
-- **“Access Denied” Errors**
-    - Make sure the MySQL user has privileges on the database:
-      ```sql
-      SHOW GRANTS FOR '<db_user>'@'localhost';
-      ```  
-    - If needed, re-run:
-      ```sql
-      GRANT ALL PRIVILEGES ON `<db_name>`.* TO '<db_user>'@'localhost';
-      FLUSH PRIVILEGES;
-      ```
-
----
+## Support & Logs
+- **Nginx logs**:
+    - Access: `/var/log/nginx/${PROJECT_NAME}-access.log`
+    - Error: `/var/log/nginx/${PROJECT_NAME}-error.log`
+- **PHP-FPM logs**: Default at `/var/log/php8.3-fpm.log` or similar.
+- **Audit Log** page (`audit_log.php`) shows actions logged by `logAction($pdo, user_id, message)`.
 
 ## License
-
-This project uses the [MIT License](LICENSE). Feel free to adapt and redistribute as you see fit.
+This project is released under the MIT License. See [LICENSE](LICENSE) for details.

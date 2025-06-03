@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS email_settings (
     id INT AUTO_INCREMENT PRIMARY KEY,
     smtp_host VARCHAR(255),
     smtp_port VARCHAR(10),
+    from_email VARCHAR(255) NOT NULL DEFAULT '',
+    from_name VARCHAR(255) NOT NULL DEFAULT '',
     smtp_user VARCHAR(100),
     smtp_pass VARCHAR(100),
     smtp_secure VARCHAR(10)

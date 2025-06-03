@@ -1,0 +1,49 @@
+# Ignore Composer dependencies
+/vendor/
+
+# Ignore PHPStorm, IDEs, and editor settings
+/.idea/
+/*.iml
+/.vscode/
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
+
+# Ignore environment variable files
+.env
+.env.local
+
+# Ignore database credentials (auto-generated)
+/db.php
+
+# Ignore logs and temporary files
+*.log
+*.cache
+tmp/
+cache/
+
+# Ignore Node modules (if using Node/NPM)
+/node_modules/
+
+# Ignore build artifacts
+dist/
+build/
+
+# Ignore PHPUnit result caches and coverage
+phpunit.xml
+.phpunit.result.cache
+coverage/
+
+# Ignore Nginx config overrides (if any)
+/*.conf
+
+# Ignore sensitive files
+*.key
+*.crt
+
+# Ignore Vim swap files
+*.swp
+
+# Ignore any other local config
+local-config.php
