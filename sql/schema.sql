@@ -54,3 +54,16 @@ CREATE TABLE IF NOT EXISTS role_permissions (
   FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE,
   UNIQUE KEY unique_role_perm (role_id, permission_id)
 );
+
+CREATE TABLE IF NOT EXISTS modules (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(100)        NOT NULL,     -- e.g. "Users"
+  description VARCHAR(255)   NOT NULL,     -- e.g. "Manage Users"
+  icon_class VARCHAR(100)    NOT NULL,     -- e.g. "fas fa-users"
+  box_color VARCHAR(50)      NOT NULL,     -- e.g. "bg-info" or "bg-warning"
+  link VARCHAR(255)          NOT NULL,     -- e.g. "users.php"
+  permission_key VARCHAR(100) NOT NULL,    -- e.g. "user.manage"
+  sort_order INT             NOT NULL DEFAULT 0,
+  created_at TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  is_active BOOLEAN          NOT NULL DEFAULT TRUE
+);

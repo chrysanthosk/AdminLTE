@@ -1,5 +1,6 @@
 <?php
 // includes/sidebar.php — side navigation menu
+require_once __DIR__ . '/../auth.php';
 
 $user = currentUser($pdo);
 ?>
@@ -38,7 +39,7 @@ $user = currentUser($pdo);
       <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu">
         <!-- Dashboard (visible to all logged-in users) -->
         <li class="nav-item">
-          <a href="<?php echo hasPermission($pdo, 'dashboard.view') ? '/pages/dashboard.php' : '/pages/user_dashboard.php'; ?>" class="nav-link">
+          <a href="/pages/dashboard.php" class="nav-link">
             <i class="nav-icon fas fa-tachometer-alt"></i>
             <p>Dashboard</p>
           </a>
@@ -47,9 +48,11 @@ $user = currentUser($pdo);
         <?php if (hasPermission($pdo, 'user.manage') ||
                   hasPermission($pdo, 'role.manage') ||
                   hasPermission($pdo, 'role.assign') ||
+                  hasPermission($pdo, 'permission.manage') ||
+                  hasPermission($pdo, 'module.manage') ||
                   hasPermission($pdo, 'email.manage') ||
-                  hasPermission($pdo, 'audit.view') ||
-                  hasPermission($pdo, 'permission.manage')): ?>
+                  hasPermission($pdo, 'audit.view')
+        ): ?>
           <li class="nav-item has-treeview">
             <a href="#" class="nav-link">
               <i class="nav-icon fas fa-cog"></i>
@@ -95,6 +98,14 @@ $user = currentUser($pdo);
                 </li>
               <?php endif; ?>
 
+                <?php if (hasPermission($pdo, 'module.manage')): ?>
+                  <li class="nav-item">
+                    <a href="/pages/modules.php" class="nav-link">
+                      <i class="far fa-circle nav-icon"></i>
+                      <p>Modules</p>
+                    </a>
+                  </li>
+                <?php endif; ?>
               <?php if (hasPermission($pdo, 'email.manage')): ?>
                 <li class="nav-item">
                   <a href="/pages/email_settings.php" class="nav-link">

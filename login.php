@@ -26,12 +26,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_SESSION['user_id'] = $user['id'];
                     $_SESSION['role']    = $user['role'];
                     logAction($pdo, $user['id'], 'Logged in with 2FA');
-                    // Redirect based on role
-                    if ($user['role'] === 'admin') {
-                        header('Location: pages/dashboard.php');
-                    } else {
-                        header('Location: pages/user_dashboard.php');
-                    }
+                    // Always send everyone to dashboard.php
+                    header('Location: pages/dashboard.php');
                     exit();
                 } else {
                     $error = 'Invalid 2FA code.';
@@ -42,11 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['role']    = $user['role'];
             logAction($pdo, $user['id'], 'Logged in');
-            if ($user['role'] === 'admin') {
-                header('Location: pages/dashboard.php');
-            } else {
-                header('Location: pages/user_dashboard.php');
-            }
+            header('Location: pages/dashboard.php');
             exit();
         }
     } else {
