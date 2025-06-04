@@ -18,11 +18,11 @@ $page_title = isset($page_title) ? $page_title : '';
   <!-- Font Awesome -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.15.4/css/all.min.css">
   <!-- AdminLTE (light) -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/css/adminlte.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/admin-lte/3.2.0/css/adminlte.min.css">
 
   <?php if ($theme === 'dark'): ?>
     <!-- AdminLTE (dark) -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/css/adminlte-dark.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/admin-lte/3.2.0/css/adminlte.min.css">
   <?php endif; ?>
 </head>
 
@@ -46,7 +46,7 @@ $page_title = isset($page_title) ? $page_title : '';
         <?php if ($user && $user['role'] === 'admin'): ?>
           <a href="/pages/dashboard.php" class="nav-link">Admin Panel</a>
         <?php else: ?>
-          <a href="/pages/user_dashboard.php" class="nav-link">Home</a>
+          <a href="/pages/dashboard.php" class="nav-link">Home</a>
         <?php endif; ?>
       </li>
     </ul>

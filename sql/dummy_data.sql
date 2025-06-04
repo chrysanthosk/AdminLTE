@@ -19,14 +19,24 @@ INSERT INTO roles (role_name, role_desc) VALUES
     ('profile.edit', 'Edit Own Profile'),
     ('role.assign', 'Assign Permissions to Roles'),
     ('permission.manage', 'Create/Edit/Delete Permissions'),
-    ('module.manage', 'Create/Edit/Delete Dashboard Modules');
+    ('module.manage', 'Create/Edit/Delete Dashboard Modules'),
+    ('client.manage', 'Client Create/Edit/Delete'),
+    ('product_category.manage', 'Product Category Create/Edit/Delete'),
+    ('vat.manage', 'VAT Management , Create/Edit/Delete'),
+    ('product.manage', 'Create/Edit/Delete Products'),
+    ('service_category.manage', 'Create/Edit/Delete Service Category'),
+   ('services.manage', 'Create/Edit/Delete Service'),
+   ('pricelist.manage','Create/Edit/Delete Pricelist'),
+   ('therapists.manage','Create/Edit/Delete Therapist'),
+   ('calendar_view.view','Calendar View'),
+   ('appointment.manage','Create/Edit/Delete Appointments');
 
   -- Assign some default permissions to “admin” role (role_id=1 if that was seeded earlier)
   INSERT IGNORE INTO role_permissions (role_id, permission_id)
     SELECT r.id, p.id
     FROM roles r
     JOIN permissions p
-      ON p.permission_key IN ('user.manage','role.manage','email.manage','audit.view','profile.edit','role.assign','permission.manage','module.manage')
+      ON p.permission_key IN ('user.manage','role.manage','email.manage','audit.view','profile.edit','role.assign','permission.manage','module.manage','client.manage','vat.manage','product_category.manage','product.manage','service_category.manage','services.manage','pricelist.manage','therapists.manage','calendar_view.view','appointment.manage')
     WHERE r.role_name = 'admin';
 
   -- Optionally give “user” role only the “profile.edit” permission:
@@ -47,4 +57,14 @@ INSERT INTO roles (role_name, role_desc) VALUES
       ('Permissions', 'Manage Permissions', 'fas fa-lock', 'bg-success', 'permissions.php', 'permission.manage', 4),
       ('Email', 'Email Settings', 'fas fa-envelope', 'bg-warning', 'email_settings.php', 'email.manage', 5),
       ('Logs', 'Audit Log', 'fas fa-file-alt', 'bg-danger', 'audit_log.php', 'audit.view', 6),
-      ('Modules','Modules Page','fas fa-lock','bg-success','modules.php','module.manage',7);
+      ('Modules','Modules Page','fas fa-lock','bg-success','modules.php','module.manage',7),
+      ('Clients','Clients Page','fas fa-users','bg-info','clients.php','client.manage',8),
+      ('Vat','Vat Page','fas fa-users','bg-info','vat.php','vat.manage',9),
+      ('Product Category','Product Category Page','fas fa-users','bg-info','product_category.php','product_category.manage',10),
+      ('Products','Products Page','fas fa-users','bg-info','products.php','product.manage',11),
+      ('Service Category','Service Category Page','fas fa-users','bg-info','service_category.php','product.manage',12),
+      ('Services','Services Page','fas fa-users','bg-info','services.php','services.manage',13),
+      ('PriceList','PriceList Page','fas fa-users','bg-info','pricelist.php','pricelist.manage',14),
+      ('Therapists','Therapists Page','fas fa-users','bg-info','therapists.php','therapists.manage',15),
+      ('Calendar View','Calendar View Page','fas fa-users','bg-info','calendar_view.php','calendar_view.view',16),
+      ('Appointments','Appointments Page','fas fa-users','bg-info','appointments.php','appointment.manage',17);

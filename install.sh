@@ -3,16 +3,16 @@
 # install.sh — Automated installer for AdminLTE PHP/MySQL project with SMTP testing support
 #
 # This script will:
-#   1. Detect Linux distribution (Debian/Ubuntu or RHEL/CentOS/Fedora) and install web server, database, PHP, and extensions.
+#   1. Detect Linux distribution (Debian/Ubuntu or RHEL/CentOS/Fedora) and install web server, database, PHP, extensions (including GD).
 #   2. Prompt for MySQL/MariaDB root password to secure the database.
 #   3. Ask for a project name, create a database and a dedicated DB user with a random password.
 #   4. Write a `db.php` file in the project root with the new credentials.
 #   5. Create a document root directory named after the project, copy project files there
-#      (except install.sh and SQL dumps).
+#      (excluding install.sh, sql/, and vendor/).
 #   6. Prompt for DNS/domain to configure Nginx, plus paths to SSL certificate and key.
 #   7. Generate an Nginx server block for the project with separate access/error logs.
-#   8. Reload/restart Nginx and PHP-FPM/MariaDB.
-#   9. Install Composer (if not present) and PHPMailer via Composer in the project root.
+#   8. Reload/restart Nginx, PHP-FPM, and MySQL/MariaDB as appropriate.
+#   9. Install Composer (if not present) and PHPMailer & PhpSpreadsheet via Composer in the project root.
 #  10. Display the database name, DB user, DB password, and project URL at the end.
 #
 # Usage:
@@ -41,7 +41,8 @@ function detect_distro() {
 function install_packages_debian() {
     apt-get update -y
     apt-get install -y nginx mysql-server \
-        php8.3-fpm php8.3-mysql php8.3-cli php8.3-mbstring php8.3-xml php8.3-zip php8.3-curl unzip wget
+      php8.3-fpm php8.3-mysql php8.3-cli php8.3-mbstring php8.3-xml php8.3-zip php8.3-curl php8.3-gd \
+      unzip wget
 }
 
 function install_packages_redhat() {
@@ -52,12 +53,14 @@ function install_packages_redhat() {
         PKG_MGR="yum"
     fi
 
-    # Install EPEL if Fedora/RHEL based
+    # Install EPEL if on CentOS/RHEL
     if [ "$PKG_MGR" == "yum" ]; then
         yum install -y epel-release
     fi
 
-    $PKG_MGR install -y nginx mariadb-server php php-cli php-mysqlnd php-mbstring php-xml php-zip php-curl php-fpm unzip wget
+    $PKG_MGR install -y nginx mariadb-server \
+      php php-cli php-mysqlnd php-mbstring php-xml php-zip php-curl php-gd php-fpm \
+      unzip wget
 }
 
 function start_enable_services_debian() {
@@ -103,7 +106,7 @@ esac
 #=== 2. Install Base Packages ===#
 
 echo
-echo "---- Installing web server, database, PHP, and extensions ----"
+echo "---- Installing web server, database, PHP, and extensions (including GD) ----"
 if [ "$PLATFORM" == "debian" ]; then
     install_packages_debian
 elif [ "$PLATFORM" == "redhat" ]; then
@@ -191,8 +194,8 @@ cat > "$DB_PHP_PATH" <<EOL
 
 try {
     \$pdo = new PDO(\$dsn, \$db_user, \$db_pass, \$options);
-} catch (\PDOException \$e) {
-    throw new \PDOException(\$e->getMessage(), (int)\$e->getCode());
+} catch (\\PDOException \$e) {
+    throw new \\PDOException(\$e->getMessage(), (int)\$e->getCode());
 }
 ?>
 EOL
@@ -252,13 +255,13 @@ server {
         try_files \$uri \$uri/ /index.php?\$query_string;
     }
 
-    location ~ \.php\$ {
+    location ~ \\.php\$ {
         include fastcgi_params;
         fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
         fastcgi_pass unix:/run/php/${PHP_FPM_SOCKET};
     }
 
-    location ~ /\.ht {
+    location ~ /\\.ht {
         deny all;
     }
 }
@@ -283,7 +286,7 @@ fi
 
 echo "Nginx, PHP-FPM, and database service started."
 
-#=== 10. Install Composer & PHPMailer ===#
+#=== 10. Install Composer & PHPMailer & PhpSpreadsheet ===#
 
 echo
 echo "---- Installing Composer (if not present) ----"
@@ -299,14 +302,14 @@ else
 fi
 
 echo
-echo "---- Installing PHPMailer via Composer ----"
+echo "---- Installing PHPMailer and PhpSpreadsheet via Composer ----"
 cd "$DOC_ROOT"
 if [ -f "composer.json" ]; then
     composer install --no-interaction --prefer-dist
 else
-    composer require phpmailer/phpmailer --no-interaction
+    composer require phpmailer/phpmailer phpoffice/phpspreadsheet --no-interaction
 fi
-echo "PHPMailer installed."
+echo "Composer dependencies installed."
 
 #=== 11. Final Summary ===#
 
