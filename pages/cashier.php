@@ -4,6 +4,10 @@
 require_once '../auth.php';
 requirePermission($pdo, 'cashier.manage');
 
+// ─── Fetch all payment methods for dynamic dropdowns ───────────────────────
+$pmStmt = $pdo->query("SELECT id, name FROM payment_methods ORDER BY name ASC");
+$allPaymentMethods = $pmStmt->fetchAll(PDO::FETCH_ASSOC);
+
 // ────────────────────────────────────────────────────────────────────────────────
 // (A) Handle “Delete” action via GET (delete an entire sale and its line‐items)
 // ────────────────────────────────────────────────────────────────────────────────
@@ -65,7 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_sale'])) {
       $product_id   = (int)$row['product_id'];
       $therapist_id = (int)$row['therapist_id'];
       $qty          = max(1,(int)$row['qty']);
-      $unit_price   = (float)$row['unit_price'];
+      $unit_price   = (float)$row['price'];
 
       $line_total = round($unit_price * $qty, 2);
       $products_subtotal += $line_total;
@@ -330,7 +334,7 @@ $allServices = $serviceStmt->fetchAll(PDO::FETCH_ASSOC);
 
 // (D3) All Products
 $productStmt = $pdo->query("
-  SELECT id, name, sell_price
+  SELECT id, name, sell_price AS price
     FROM products
    ORDER BY name
 ");
@@ -385,7 +389,6 @@ $allTherapists = $therapistStmt->fetchAll(PDO::FETCH_ASSOC);
             <button
               type="button"
               class="close"
-              data-toggle="collapse"
               data-target="#collapseAddSale"
               aria-controls="collapseAddSale"
               aria-label="Close"
@@ -689,9 +692,16 @@ $allTherapists = $therapistStmt->fetchAll(PDO::FETCH_ASSOC);
 
 <!-- ─────────────────────────────────────────────────────────────────────────────────── -->
 <!-- (H) Required JS: jQuery, Bootstrap, Select2 (for searchable selects) ───────────────── -->
+
 <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.0.13/dist/js/select2.min.js"></script>
+<script>
+  // Safety‐net: force-hide the #collapseAddSale panel if the “×” is clicked
+  $('[data-target="#collapseAddSale"].close').on('click', function() {
+    $('#collapseAddSale').collapse('hide');
+  });
+</script>
 
 <!-- … (above) … -->
 <script>
@@ -957,11 +967,18 @@ $(document).ready(function() {
             class="form-control payment-method"
             required
           >
-            <option value="Cash">Cash</option>
-            <option value="Credit Card">Credit Card</option>
-            <option value="Revolut">Revolut</option>
-            <option value="Cheque">Cheque</option>
-            <option value="Bank Transfer">Bank Transfer</option>
+          <option value="">-- Select Payment Method --</option>
+          <?php foreach ($allPaymentMethods as $pm): ?>
+            <option
+              value="<?= htmlspecialchars($pm['name'], ENT_QUOTES) ?>"
+              <?= (isset($existingPaymentMethod) && $existingPaymentMethod === $pm['name'])
+                  ? 'selected'
+                  : ''
+              ?>
+            >
+              <?= htmlspecialchars($pm['name']) ?>
+            </option>
+          <?php endforeach; ?>
           </select>
         </td>
         <td>
@@ -1031,6 +1048,11 @@ $(document).ready(function() {
   });
 });
 </script>
+<script>
+  // Expose allPaymentMethods (PHP) to JS
+  const allPaymentMethods = <?= json_encode($allPaymentMethods, JSON_UNESCAPED_UNICODE) ?>;
+</script>
+
 <?php if (!empty($just_saved_sale_id)): ?>
 <script>
   // Open the newly saved receipt in a new tab/window (popup)

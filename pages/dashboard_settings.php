@@ -4,9 +4,63 @@
 require_once '../auth.php';
 requirePermission($pdo, 'dash_settings.manage');
 
-// ------------------------------------------------------
-// (A) Fetch or Create the Single Settings Row (id=1)
-// ------------------------------------------------------
+// ────────────────────────────────────────────────────────────────────────────
+// (A) AJAX Handlers for Payment Methods (add/edit/delete)
+// ────────────────────────────────────────────────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pm_action'])) {
+  header('Content-Type: application/json');
+  $action = $_POST['pm_action'];
+
+  try {
+    if ($action === 'add') {
+      // Add a new payment method
+      $name = trim($_POST['name'] ?? '');
+      if ($name === '') {
+        throw new Exception('Name cannot be empty.');
+      }
+      // Insert
+      $ins = $pdo->prepare("INSERT INTO payment_methods (name) VALUES (:name)");
+      $ins->execute(['name' => $name]);
+      $newId = $pdo->lastInsertId();
+      echo json_encode(['success' => true, 'id' => $newId, 'name' => $name]);
+      exit();
+    }
+
+    if ($action === 'edit') {
+      // Edit an existing payment method
+      $id   = (int)($_POST['id'] ?? 0);
+      $name = trim($_POST['name'] ?? '');
+      if ($id <= 0 || $name === '') {
+        throw new Exception('Invalid ID or Name.');
+      }
+      $upd = $pdo->prepare("UPDATE payment_methods SET name = :name WHERE id = :id");
+      $upd->execute(['name' => $name, 'id' => $id]);
+      echo json_encode(['success' => true, 'id' => $id, 'name' => $name]);
+      exit();
+    }
+
+    if ($action === 'delete') {
+      // Delete a payment method
+      $id = (int)($_POST['id'] ?? 0);
+      if ($id <= 0) {
+        throw new Exception('Invalid ID.');
+      }
+      $del = $pdo->prepare("DELETE FROM payment_methods WHERE id = :id");
+      $del->execute(['id' => $id]);
+      echo json_encode(['success' => true, 'id' => $id]);
+      exit();
+    }
+
+    throw new Exception('Unknown action.');
+  } catch (Exception $e) {
+    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    exit();
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// (B) Fetch or Create the Single Settings Row (id=1)
+// ────────────────────────────────────────────────────────────────────────────
 $stmt = $pdo->prepare("SELECT * FROM dashboard_settings WHERE id = 1");
 $stmt->execute();
 $settings = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -34,10 +88,11 @@ if (!$settings) {
   $settings = $stmt->fetch(PDO::FETCH_ASSOC);
 }
 
-// ------------------------------------------------------
-// (B) Handle Form Submission (POST => Save/Update)
-// ------------------------------------------------------
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+// ────────────────────────────────────────────────────────────────────────────
+// (C) Handle Form Submission (POST => Save/Update Dashboard Settings)
+// (unchanged from previous version)
+// ────────────────────────────────────────────────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['pm_action'])) {
   // Collect and sanitize inputs:
   $company_name         = trim($_POST['company_name'] ?? '');
   $company_vat_number   = trim($_POST['company_vat_number'] ?? '');
@@ -87,9 +142,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $flashMessage = "Settings updated successfully.";
 }
 
-// ------------------------------------------------------
-// (C) Render the Page
-// ------------------------------------------------------
+// ────────────────────────────────────────────────────────────────────────────
+// (D) Fetch all Payment Methods for display in the “Payment Options” section
+// ────────────────────────────────────────────────────────────────────────────
+$pmStmt = $pdo->query("SELECT id, name FROM payment_methods ORDER BY name ASC");
+$allPaymentMethods = $pmStmt->fetchAll(PDO::FETCH_ASSOC);
+
 ?>
 <?php include '../includes/header.php'; ?>
 <?php include '../includes/sidebar.php'; ?>
@@ -119,7 +177,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
       <form method="POST" action="dashboard_settings.php">
         <div class="row">
-          <!-- ─── Left Column: Company Information ────────────────────────────── -->
+          <!-- ─── Left Column: Company Information ──────────────────────────────── -->
           <div class="col-md-6">
             <div class="card card-primary">
               <div class="card-header">
@@ -175,11 +233,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
               </div>
             </div>
+
+            <!-- ─── New “Payment Options” Section ─────────────────────────── -->
+            <div class="card card-success">
+              <div class="card-header">
+                <h3 class="card-title">Payment Options</h3>
+              </div>
+              <div class="card-body">
+                <!-- (D1) Add New Payment Method Form -->
+                <div class="form-inline mb-3">
+                  <input
+                    type="text"
+                    id="newPaymentMethod"
+                    class="form-control"
+                    placeholder="New payment method…"
+                    style="width: auto; margin-right: 8px;"
+                  >
+                  <button type="button" id="btnAddPM" class="btn btn-primary">Add</button>
+                </div>
+
+                <!-- (D2) Table of Existing Payment Methods -->
+                <table class="table table-bordered" id="paymentMethodsTable">
+                  <thead>
+                    <tr>
+                      <th style="width: 70%;">Name</th>
+                      <th style="width: 30%;">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <?php foreach ($allPaymentMethods as $pm): ?>
+                      <tr data-id="<?= $pm['id'] ?>">
+                        <td class="pm-name"><?= htmlspecialchars($pm['name']) ?></td>
+                        <td>
+                          <button type="button" class="btn btn-sm btn-info btnEditPM" title="Edit">
+                            <i class="fas fa-edit"></i>
+                          </button>
+                          <button type="button" class="btn btn-sm btn-danger btnDeletePM" title="Delete">
+                            <i class="fas fa-trash"></i>
+                          </button>
+                        </td>
+                      </tr>
+                    <?php endforeach; ?>
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
 
           <!-- ─── Right Column: SMS Settings ──────────────────────────────────── -->
           <div class="col-md-6">
-            <!-- (1) SMS Settings for Appointments -->
+            <!-- SMS Settings for Appointments -->
             <div class="card card-info">
               <div class="card-header">
                 <h3 class="card-title">SMS Settings for Appointments</h3>
@@ -213,7 +316,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               </div>
             </div>
 
-            <!-- (2) SMS Settings for Birthdays -->
+            <!-- SMS Settings for Birthdays -->
             <div class="card card-warning">
               <div class="card-header">
                 <h3 class="card-title">SMS Settings for Birthdays</h3>
@@ -249,7 +352,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           </div>
         </div>
 
-        <!-- ─── Submit Button ─────────────────────────────────────────────────────── -->
+        <!-- Save Dashboard Settings -->
         <div class="row">
           <div class="col-12 text-center mb-3">
             <button type="submit" class="btn btn-success">
@@ -259,7 +362,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
       </form>
 
-      <!-- ─── Placeholder Table: “SMS Information” ─────────────────────────────── -->
+      <!-- Placeholder SMS Info Table (unchanged) -->
       <div class="row">
         <div class="col-12">
           <div class="card card-outline card-secondary">
@@ -310,3 +413,147 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </div> <!-- /.content-wrapper -->
 
 <?php include '../includes/footer.php'; ?>
+
+<!-- ─────────────────────────────────────────────────────────────────────────────── -->
+<!-- Required JS: jQuery, Bootstrap, plus our custom Payment‐Methods JS below -->
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+$(document).ready(function() {
+  // ─── (PM1) Add New Payment Method via AJAX ─────────────────────────────
+  $('#btnAddPM').click(function(e) {
+    e.preventDefault();
+    const name = $('#newPaymentMethod').val().trim();
+    if (!name) {
+      return alert('Please enter a payment method name.');
+    }
+    $.post('dashboard_settings.php', {
+      pm_action: 'add',
+      name: name
+    }, function(resp) {
+      if (resp.success) {
+        // Append new row to table
+        const newId = resp.id;
+        const newName = resp.name;
+        $('#paymentMethodsTable tbody').append(`
+          <tr data-id="${newId}">
+            <td class="pm-name">${$('<div>').text(newName).html()}</td>
+            <td>
+              <button class="btn btn-sm btn-info btnEditPM" title="Edit">
+                <i class="fas fa-edit"></i>
+              </button>
+              <button class="btn btn-sm btn-danger btnDeletePM" title="Delete">
+                <i class="fas fa-trash"></i>
+              </button>
+            </td>
+          </tr>
+        `);
+        $('#newPaymentMethod').val('');
+      } else {
+        alert('Error: ' + resp.error);
+      }
+    }, 'json');
+  });
+
+  // ─── (PM2) Edit Payment Method (open modal) ───────────────────────────
+  let editPMId = null;
+  $('#paymentMethodsTable').on('click', '.btnEditPM', function() {
+    const $tr = $(this).closest('tr');
+    editPMId = $tr.data('id');
+    const currentName = $tr.find('.pm-name').text();
+    $('#editPaymentMethodInput').val(currentName);
+    $('#editPaymentMethodModal').modal('show');
+  });
+
+  // ─── (PM3) Save Edited Payment Method via AJAX ───────────────────────
+  $('#btnSaveEditPM').click(function() {
+    const newName = $('#editPaymentMethodInput').val().trim();
+    if (!newName) {
+      return alert('Name cannot be empty.');
+    }
+    $.post('dashboard_settings.php', {
+      pm_action: 'edit',
+      id: editPMId,
+      name: newName
+    }, function(resp) {
+      if (resp.success) {
+        // Update table row
+        $(`#paymentMethodsTable tbody tr[data-id="${editPMId}"] .pm-name`)
+          .text(resp.name);
+        $('#editPaymentMethodModal').modal('hide');
+      } else {
+        alert('Error: ' + resp.error);
+      }
+    }, 'json');
+  });
+
+  // ─── (PM4) Delete Payment Method via AJAX ────────────────────────────
+  $('#paymentMethodsTable').on('click', '.btnDeletePM', function() {
+    const $tr = $(this).closest('tr');
+    const id = $tr.data('id');
+    if (!confirm('Delete this payment method?')) return;
+    $.post('dashboard_settings.php', {
+      pm_action: 'delete',
+      id: id
+    }, function(resp) {
+      if (resp.success) {
+        $tr.remove();
+      } else {
+        alert('Error: ' + resp.error);
+      }
+    }, 'json');
+  });
+});
+</script>
+
+<!-- ─────────────────────────────────────────────────────────────────────────────── -->
+<!-- Edit‐Payment Modal (invisible until triggered) -->
+<div
+  class="modal fade"
+  id="editPaymentMethodModal"
+  tabindex="-1"
+  role="dialog"
+  aria-labelledby="editPaymentMethodLabel"
+  aria-hidden="true"
+>
+  <div class="modal-dialog modal-sm" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="editPaymentMethodLabel">Edit Payment Method</h5>
+        <button
+          type="button"
+          class="close"
+          data-dismiss="modal"
+          aria-label="Close"
+        >
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <input
+          type="text"
+          id="editPaymentMethodInput"
+          class="form-control"
+          placeholder="Payment method name"
+        >
+      </div>
+      <div class="modal-footer">
+        <button
+          type="button"
+          class="btn btn-secondary"
+          data-dismiss="modal"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="btn btn-primary"
+          id="btnSaveEditPM"
+        >
+          Save
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
