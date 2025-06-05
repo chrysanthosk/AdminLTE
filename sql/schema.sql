@@ -201,3 +201,118 @@ CREATE TABLE IF NOT EXISTS appointments (
   created_at TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS dashboard_settings (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+
+  company_name            VARCHAR(255) NOT NULL,
+  company_vat_number      VARCHAR(50)  DEFAULT NULL,
+  company_phone_number    VARCHAR(50)  DEFAULT NULL,
+  company_address         TEXT         DEFAULT NULL,
+
+  sms_appointments_enabled       TINYINT(1)   NOT NULL DEFAULT 0,
+  sms_appointments_message       VARCHAR(165) DEFAULT NULL,
+
+  sms_birthdays_enabled          TINYINT(1)   NOT NULL DEFAULT 0,
+  sms_birthdays_message          VARCHAR(165) DEFAULT NULL,
+
+  sms_sent_appointments_count    INT          NOT NULL DEFAULT 0,
+  sms_sent_birthdays_count       INT          NOT NULL DEFAULT 0,
+
+  updated_at               TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                              ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ========================================================================
+-- File: 2025_06_05_000002_create_cashier_tables.sql
+-- ========================================================================
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- (A) Master “sales” table (one row per completed sale)
+-- ─────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS `sales` (
+  `id`                 INT AUTO_INCREMENT PRIMARY KEY,
+  `sale_date`          DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `appointment_id`     INT             NULL COMMENT 'FK → appointments.id; if sale linked to an appointment',
+  `client_id`          INT             NULL COMMENT 'FK → clients.id (if no appointment, user can still select a client manually)',
+  `services_subtotal`  DECIMAL(10,2)   NOT NULL DEFAULT 0.00,
+  `services_vat`       DECIMAL(10,2)   NOT NULL DEFAULT 0.00,
+  `products_subtotal`  DECIMAL(10,2)   NOT NULL DEFAULT 0.00,
+  `products_vat`       DECIMAL(10,2)   NOT NULL DEFAULT 0.00,
+  `total_vat`          DECIMAL(10,2)   NOT NULL DEFAULT 0.00,
+  `grand_total`        DECIMAL(10,2)   NOT NULL DEFAULT 0.00,
+  `created_at`         TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`         TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX (`sale_date`),
+  INDEX (`appointment_id`),
+  INDEX (`client_id`)
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci;
+
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- (B) Each service‐line item (one row per service in the sale)
+-- ─────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS `sale_services` (
+  `id`            INT AUTO_INCREMENT PRIMARY KEY,
+  `sale_id`       INT NOT NULL COMMENT 'FK → sales.id',
+  `service_id`    INT NOT NULL COMMENT 'FK → services.id',
+  `therapist_id`  INT NOT NULL COMMENT 'FK → therapists.id',
+  `quantity`      INT NOT NULL DEFAULT 1,
+  `unit_price`    DECIMAL(10,2) NOT NULL COMMENT 'Price per unit (including VAT)',
+  `line_total`    DECIMAL(10,2) NOT NULL COMMENT 'quantity×unit_price',
+  INDEX (`sale_id`),
+  INDEX (`service_id`),
+  INDEX (`therapist_id`),
+  CONSTRAINT `fk_sale_services_sale` FOREIGN KEY (`sale_id`)
+    REFERENCES `sales`(`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_sale_services_service` FOREIGN KEY (`service_id`)
+    REFERENCES `services`(`id`) ON DELETE RESTRICT,
+  CONSTRAINT `fk_sale_services_therapist` FOREIGN KEY (`therapist_id`)
+    REFERENCES `therapists`(`id`) ON DELETE RESTRICT
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci;
+
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- (C) Each product‐line item (one row per product in the sale)
+-- ─────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS `sale_products` (
+  `id`             INT AUTO_INCREMENT PRIMARY KEY,
+  `sale_id`        INT NOT NULL COMMENT 'FK → sales.id',
+  `product_id`     INT NOT NULL COMMENT 'FK → products.id',
+  `therapist_id`   INT NOT NULL COMMENT 'FK → therapists.id',
+  `quantity`       INT NOT NULL DEFAULT 1,
+  `unit_price`     DECIMAL(10,2) NOT NULL COMMENT 'Price per unit (including VAT)',
+  `line_total`     DECIMAL(10,2) NOT NULL COMMENT 'quantity×unit_price',
+  INDEX (`sale_id`),
+  INDEX (`product_id`),
+  INDEX (`therapist_id`),
+  CONSTRAINT `fk_sale_products_sale` FOREIGN KEY (`sale_id`)
+    REFERENCES `sales`(`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_sale_products_product` FOREIGN KEY (`product_id`)
+    REFERENCES `products`(`id`) ON DELETE RESTRICT,
+  CONSTRAINT `fk_sale_products_therapist` FOREIGN KEY (`therapist_id`)
+    REFERENCES `therapists`(`id`) ON DELETE RESTRICT
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci;
+
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- (D) Each payment record for a sale (one row per payment method used)
+-- ─────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS `sale_payments` (
+  `id`             INT AUTO_INCREMENT PRIMARY KEY,
+  `sale_id`        INT NOT NULL COMMENT 'FK → sales.id',
+  `payment_date`   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `payment_method` VARCHAR(50) NOT NULL COMMENT 'e.g. Cash, Credit Card, Revolut, Cheque, Bank Transfer',
+  `amount`         DECIMAL(10,2) NOT NULL,
+  INDEX (`sale_id`),
+  CONSTRAINT `fk_sale_payments_sale` FOREIGN KEY (`sale_id`)
+    REFERENCES `sales`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci;

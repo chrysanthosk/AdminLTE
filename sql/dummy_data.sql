@@ -29,14 +29,16 @@ INSERT INTO roles (role_name, role_desc) VALUES
    ('pricelist.manage','Create/Edit/Delete Pricelist'),
    ('therapists.manage','Create/Edit/Delete Therapist'),
    ('calendar_view.view','Calendar View'),
-   ('appointment.manage','Create/Edit/Delete Appointments');
+   ('appointment.manage','Create/Edit/Delete Appointments'),
+   ('dash_settings.manage','Dashboard Settings'),
+   ('cashier.manage','Cashier Module');
 
   -- Assign some default permissions to “admin” role (role_id=1 if that was seeded earlier)
   INSERT IGNORE INTO role_permissions (role_id, permission_id)
     SELECT r.id, p.id
     FROM roles r
     JOIN permissions p
-      ON p.permission_key IN ('user.manage','role.manage','email.manage','audit.view','profile.edit','role.assign','permission.manage','module.manage','client.manage','vat.manage','product_category.manage','product.manage','service_category.manage','services.manage','pricelist.manage','therapists.manage','calendar_view.view','appointment.manage')
+      ON p.permission_key IN ('user.manage','role.manage','email.manage','audit.view','profile.edit','role.assign','permission.manage','module.manage','client.manage','vat.manage','product_category.manage','product.manage','service_category.manage','services.manage','pricelist.manage','therapists.manage','calendar_view.view','appointment.manage','dash_settings.manage','cashier.manage')
     WHERE r.role_name = 'admin';
 
   -- Optionally give “user” role only the “profile.edit” permission:
@@ -67,4 +69,6 @@ INSERT INTO roles (role_name, role_desc) VALUES
       ('PriceList','PriceList Page','fas fa-users','bg-info','pricelist.php','pricelist.manage',14),
       ('Therapists','Therapists Page','fas fa-users','bg-info','therapists.php','therapists.manage',15),
       ('Calendar View','Calendar View Page','fas fa-users','bg-info','calendar_view.php','calendar_view.view',16),
-      ('Appointments','Appointments Page','fas fa-users','bg-info','appointments.php','appointment.manage',17);
+      ('Appointments','Appointments Page','fas fa-users','bg-info','appointments.php','appointment.manage',17),
+      ('Dashboard Settings','Dashboard Settings Page','fas fa-users','bg-info','dashboard_settings.php','dash_settings.manage',18),
+      ('Cashier ','Cashier  Page','fas fa-users','bg-info','cashier.php','cashier.manage',19);
