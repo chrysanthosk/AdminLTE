@@ -15,114 +15,199 @@ if (
   // Return *only* the form+mini-calendar markup and the JS needed to make it work.
   ?>
   <form id="appointmentForm">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title" id="addAppointmentLabel">New Appointment</h5>
-            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-              <span aria-hidden="true">&times;</span>
-            </button>
-          </div>
-          <div class="modal-body">
-            <!-- Client fields -->
-            <div class="form-row">
-              <div class="form-group col-md-6">
-                <label for="existingClient">Existing Client</label>
-                <select id="existingClient" name="client_id" class="w-100">
-                  <option></option>
-                  <?php
-                  $stmt = $pdo->query("
-                    SELECT id, first_name, last_name, mobile
-                      FROM clients
-                     ORDER BY first_name, last_name
-                  ");
-                  while ($c = $stmt->fetch(PDO::FETCH_ASSOC)) {
-                    $label = htmlspecialchars("{$c['first_name']} {$c['last_name']} ({$c['mobile']})");
-                    echo "<option value=\"{$c['id']}\">{$label}</option>";
-                  }
-                  ?>
-                </select>
-              </div>
-              <div class="form-group col-md-6">
-                <label for="newClientName">New Client Name</label>
-                <input type="text" class="form-control" id="newClientName" name="client_name" placeholder="If not on list" />
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group col-md-6">
-                <label for="newClientPhone">New Client Phone</label>
-                <input type="text" class="form-control" id="newClientPhone" name="client_phone" placeholder="Phone" />
-              </div>
-              <div class="form-group col-md-6">
-                <label for="notes">Notes</label>
-                <textarea class="form-control" id="notes" name="notes" rows="2" placeholder="Any notes…"></textarea>
-              </div>
-            </div>
-            <div class="form-group form-check">
-              <input type="checkbox" class="form-check-input" id="sendSmsToggle" name="send_sms" />
-              <label class="form-check-label" for="sendSmsToggle">Send SMS (future feature)</label>
-            </div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="addAppointmentLabel">New Appointment</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
 
-            <hr/>
-
-            <!-- Filter by Service Category -->
-            <div class="mb-2">
-              <strong>Filter by Category:</strong>
+      <div class="modal-body">
+        <!-- (A) Client Fields -->
+        <div class="form-row">
+          <div class="form-group col-md-6">
+            <label for="existingClient">Existing Client</label>
+            <select id="existingClient" name="client_id" class="form-control select2bs4">
+              <option value=""></option>
               <?php
-              // Pull each category’s color from service_categories.color
-              $cstmt = $pdo->query("SELECT id, name, color FROM service_categories ORDER BY name");
-              while ($cat = $cstmt->fetch(PDO::FETCH_ASSOC)) {
-                $catName  = htmlspecialchars($cat['name']);
-                $catColor = htmlspecialchars($cat['color']);
-                echo "<button type=\"button\" class=\"btn btn-sm btn-outline-secondary category-filter\" data-category-id=\"{$cat['id']}\">"
-                   . "<span class=\"category-color-box\" style=\"background:{$catColor};\"></span>"
-                   . "{$catName}</button> ";
-              }
-              echo '<button type="button" class="btn btn-sm btn-outline-secondary category-filter" data-category-id="">'
-                 . '<span class="category-color-box" style="background:#6c757d;"></span>All</button>';
-              ?>
-            </div>
-
-            <!-- Draggable Services List -->
-            <div id="serviceList" class="mb-3" style="max-height:150px; overflow-y:auto; border:1px solid #444; padding:10px;">
-              <?php
-              // Join services → service_categories to pull each service’s category color
-              $sstmt = $pdo->query("
-                SELECT s.id, s.name, s.category_id, sc.color AS cat_color
-                  FROM services s
-                  JOIN service_categories sc ON s.category_id = sc.id
-                 ORDER BY s.name
+              $stmt = $pdo->query("
+                SELECT id, first_name, last_name, mobile
+                  FROM clients
+                 ORDER BY first_name, last_name
               ");
-              while ($srv = $sstmt->fetch(PDO::FETCH_ASSOC)) {
-                $srvLabel = htmlspecialchars($srv['name']);
-                $catId    = (int)$srv['category_id'];
-                $bgColor  = htmlspecialchars($srv['cat_color']);
-                echo "<div class=\"fc-event draggable-service\" data-service-id=\"{$srv['id']}\" data-category-id=\"{$catId}\" "
-                   . "style=\"margin-bottom:5px; padding:5px; background:{$bgColor}; color:#fff; cursor:move; border-radius:3px;\">"
-                   . "{$srvLabel}</div>";
+              while ($c = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $label = htmlspecialchars("{$c['first_name']} {$c['last_name']} ({$c['mobile']})");
+                echo "<option value=\"{$c['id']}\">{$label}</option>";
               }
               ?>
-            </div>
-            <hr/>
-
-            <!-- (4) Go To Date selector above the mini-calendar -->
-            <div class="form-group">
-              <label for="goToDate">Go To Date:</label>
-              <input type="date" id="goToDate" class="form-control" />
-            </div>
-
-            <!-- Mini Calendar for Drag‐Drop -->
-            <div id="appointmentCalendarModal" style="height:350px; border:1px solid #444;"></div>
-            <input type="hidden" id="hiddenServiceId" name="service_id" />
-            <input type="hidden" id="hiddenStartTime" name="start_iso" />
-            <input type="hidden" id="hiddenEndTime" name="end_iso" />
-            <input type="hidden" id="hiddenStaffId" name="staff_id" />
+            </select>
           </div>
-          <div class="modal-footer">
-            <button type="submit" class="btn btn-primary">Add Appointment</button>
-            <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+          <div class="form-group col-md-6">
+            <label for="newClientName">Or New Client Name</label>
+            <input
+              type="text"
+              class="form-control"
+              id="newClientName"
+              name="new_client_name"
+              placeholder="First Last">
           </div>
         </div>
-      </form>
+
+        <!-- (B) Staff & Service Fields -->
+        <div class="form-row">
+          <div class="form-group col-md-6">
+            <label for="staffSelect">Staff</label>
+            <select id="staffSelect" name="staff_id" class="form-control select2bs4">
+              <option value=""></option>
+              <?php
+              $sstmt = $pdo->query("
+                SELECT id, first_name, last_name
+                  FROM users
+                 WHERE role = 'staff'
+                 ORDER BY first_name, last_name
+              ");
+              while ($s = $sstmt->fetch(PDO::FETCH_ASSOC)) {
+                $label = htmlspecialchars("{$s['first_name']} {$s['last_name']}");
+                echo "<option value=\"{$s['id']}\">{$label}</option>";
+              }
+              ?>
+            </select>
+          </div>
+          <div class="form-group col-md-6">
+            <label for="serviceSelect">Service</label>
+            <select id="serviceSelect" name="service_id" class="form-control select2bs4">
+              <option value=""></option>
+              <?php
+              $sst = $pdo->query("
+                SELECT id, name
+                  FROM services
+                 ORDER BY name
+              ");
+              while ($sv = $sst->fetch(PDO::FETCH_ASSOC)) {
+                $svc = htmlspecialchars($sv['name']);
+                echo "<option value=\"{$sv['id']}\">{$svc}</option>";
+              }
+              ?>
+            </select>
+          </div>
+        </div>
+
+        <!-- (C) Date & Time Fields -->
+        <div class="form-row">
+          <div class="form-group col-md-4">
+            <label for="startDate">Date</label>
+            <input
+              type="date"
+              class="form-control"
+              id="startDate"
+              name="date"
+              required>
+          </div>
+          <div class="form-group col-md-4">
+            <label for="startTime">Start Time</label>
+            <input
+              type="time"
+              class="form-control"
+              id="startTime"
+              name="start_time"
+              required>
+          </div>
+          <div class="form-group col-md-4">
+            <label for="duration">Duration (minutes)</label>
+            <input
+              type="number"
+              class="form-control"
+              id="duration"
+              name="duration"
+              min="15"
+              max="480"
+              value="30"
+              required>
+          </div>
+        </div>
+
+        <!-- (D) Notes -->
+        <div class="form-group">
+          <label for="notes">Notes</label>
+          <textarea
+            class="form-control"
+            id="notes"
+            name="notes"
+            rows="2"
+            placeholder="Any notes…"></textarea>
+        </div>
+
+        <div class="form-group form-check">
+          <input type="checkbox" class="form-check-input" id="sendSmsToggle" name="send_sms" />
+          <label class="form-check-label" for="sendSmsToggle">Send SMS (future feature)</label>
+        </div>
+
+        <hr/>
+
+        <!-- (E) Filter by Service Category -->
+        <div class="mb-2">
+          <strong>Filter by Category:</strong>
+          <?php
+          $cstmt = $pdo->query("SELECT id, name, color FROM service_categories ORDER BY name");
+          while ($cat = $cstmt->fetch(PDO::FETCH_ASSOC)) {
+            $catName  = htmlspecialchars($cat['name']);
+            $catColor = htmlspecialchars($cat['color']);
+            echo "<button type=\"button\" class=\"btn btn-sm btn-secondary category-filter\" data-category-id=\"{$cat['id']}\">"
+               . "<span class=\"category-color-box\" style=\"background:{$catColor};\"></span>{$catName}</button> ";
+          }
+          echo "<button type=\"button\" class=\"btn btn-sm btn-secondary category-filter\" data-category-id=\"\">All</button>";
+          ?>
+        </div>
+
+        <!-- (F) Draggable Services List -->
+        <div id="serviceList">
+          <?php
+          $dstmt = $pdo->query("
+            SELECT id, name, duration, category_id
+              FROM services
+             ORDER BY name
+          ");
+          while ($dr = $dstmt->fetch(PDO::FETCH_ASSOC)) {
+            $drName = htmlspecialchars($dr['name']);
+            $drDur  = htmlspecialchars($dr['duration']); // in minutes
+            $catId  = htmlspecialchars($dr['category_id']);
+            echo "<div
+                    class=\"draggable-service\"
+                    data-service-id=\"{$dr['id']}\"
+                    data-duration=\"{$drDur}\"
+                    data-category-id=\"{$catId}\"
+                    style=\"background:#007bff;color:#fff; padding:6px; margin-bottom:6px; cursor:move;\">
+                    {$drName}
+                  </div>";
+          }
+          ?>
+        </div>
+
+        <hr/>
+
+        <!-- (G) “Go To Date” selector above the mini‐calendar -->
+        <div class="form-group">
+          <label for="goToDate">Go To Date:</label>
+          <input type="date" id="goToDate" class="form-control" />
+        </div>
+
+        <!-- (H) Mini Calendar container (where FullCalendar will render) -->
+        <div id="appointmentCalendarModal" style="height:350px; border:1px solid #444;"></div>
+
+        <!-- (I) Hidden inputs to capture the final drop data -->
+        <input type="hidden" id="hiddenServiceId" name="service_id" />
+        <input type="hidden" id="hiddenStartTime" name="start_iso" />
+        <input type="hidden" id="hiddenEndTime" name="end_iso" />
+        <input type="hidden" id="hiddenStaffId" name="staff_id" />
+      </div>
+
+      <div class="modal-footer">
+        <button type="submit" class="btn btn-primary">Add Appointment</button>
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+      </div>
+    </div>
+  </form>
   <?php
   exit();
 }
