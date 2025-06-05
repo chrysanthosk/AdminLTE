@@ -24,6 +24,63 @@ $page_title = isset($page_title) ? $page_title : '';
     <!-- AdminLTE (dark) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/admin-lte/3.2.0/css/adminlte.min.css">
   <?php endif; ?>
+
+    <!-- ─── NOW INJECT “blinking-event” CSS ─── -->
+    <style>
+      @keyframes blink-flash {
+        0%   { opacity: 1; }
+        50%  { opacity: 0.3; }
+        100% { opacity: 1; }
+      }
+      .fc-event.blinking-event {
+        animation: blink-flash 1s infinite;
+      }
+    .select2-container .select2-selection--single {
+      background-color: #343a40 !important;
+      border: 1px solid #6c757d !important;
+      color: #fff !important;
+      height: calc(1.5em + .75rem + 2px) !important;
+    }
+    .select2-container .select2-selection--single .select2-selection__rendered {
+      color: #e0e0e0 !important;
+      line-height: calc(1.5em + .75rem) !important;
+    }
+    .select2-container .select2-selection--single .select2-selection__arrow b {
+      border-color: #e0e0e0 transparent transparent transparent !important;
+    }
+    .select2-container .select2-dropdown {
+      background-color: #343a40 !important;
+      border: 1px solid #6c757d !important;
+      z-index: 9999 !important;  /* float above modal */
+    }
+    .select2-container .select2-search--dropdown .select2-search__field {
+      background-color: #495057 !important;
+      color: #fff !important;
+      border: 1px solid #6c757d !important;
+      padding: .375rem .75rem !important;
+    }
+    .select2-container .select2-results__option {
+      color: #f8f9fa !important;
+    }
+    .select2-container .select2-results__option--highlighted {
+      background-color: #6c757d !important;
+      color: #fff !important;
+    }
+    .select2-container .select2-selection__placeholder {
+      color: #adb5bd !important;
+    }
+
+    /* Add a small colored square for each category button */
+    .category-color-box {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      margin-right: 4px;
+      vertical-align: middle;
+      border: 1px solid #888;
+    }
+    </style>
+
 </head>
 
 <body class="hold-transition sidebar-mini <?php echo ($theme === 'dark') ? 'dark-mode' : ''; ?>">
