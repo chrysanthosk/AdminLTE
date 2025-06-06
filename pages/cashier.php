@@ -35,7 +35,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_sale'])) {
   $sale_date_raw       = trim($_POST['sale_date'] ?? '');
   $sale_date           = $sale_date_raw ? date('Y-m-d H:i:s', strtotime($sale_date_raw)) : date('Y-m-d H:i:s');
   $appointment_id      = !empty($_POST['appointment_id']) ? (int)$_POST['appointment_id'] : null;
-  $client_id           = null;
+  $client_id   = !empty($_POST['existingClient']) ? intval($_POST['existingClient']) : null;
+  $client_name = $client_id
+                 ? null
+                 : trim($_POST['newClientName']);
   if (!$appointment_id && !empty($_POST['client_manual'])) {
     // If no appointment chosen, user can type a client name manually (optional)
     // For simplicity, we won't create a new client record—just store NULL in client_id.
@@ -87,12 +90,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_sale'])) {
   // 5) Insert into `sales`
   $insSale = $pdo->prepare("
     INSERT INTO sales
-      (sale_date, appointment_id, client_id,
+      (sale_date, appointment_id, client_id,client_name,
        services_subtotal, services_vat,
        products_subtotal, products_vat,
        total_vat, grand_total)
     VALUES
-      (:sale_date, :appointment_id, :client_id,
+      (:sale_date, :appointment_id, :client_id,:client_name,
        :services_subtotal, :services_vat,
        :products_subtotal, :products_vat,
        :total_vat, :grand_total)
@@ -101,6 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_sale'])) {
     'sale_date'           => $sale_date,
     'appointment_id'      => $appointment_id,
     'client_id'           => $client_id,
+    'client_name'         => $client_name,
     'services_subtotal'   => $services_subtotal,
     'services_vat'        => $services_vat,
     'products_subtotal'   => $products_subtotal,

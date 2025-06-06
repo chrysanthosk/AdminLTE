@@ -325,3 +325,24 @@ CREATE TABLE IF NOT EXISTS `sale_payments` (
   ) ENGINE=InnoDB
     DEFAULT CHARSET=utf8mb4
     COLLATE=utf8mb4_unicode_ci;
+
+    CREATE TABLE IF NOT EXISTS `z_reports` (
+      `id`               INT AUTO_INCREMENT PRIMARY KEY,
+      `report_number`    INT NOT NULL UNIQUE,
+      `date_from`        DATE NOT NULL,
+      `date_to`          DATE NOT NULL,
+      `created_at`       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB
+      DEFAULT CHARSET=utf8mb4
+      COLLATE=utf8mb4_unicode_ci;
+
+      CREATE TABLE IF NOT EXISTS `reports_log` (
+        `id`           INT AUTO_INCREMENT PRIMARY KEY,
+        `user_id`      INT NOT NULL,
+        `report_type`  VARCHAR(100) NOT NULL,
+        `parameters`   JSON         NULL,
+        `created_at`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX(`user_id`)
+      ) ENGINE=InnoDB
+        DEFAULT CHARSET=utf8mb4
+        COLLATE=utf8mb4_unicode_ci;
