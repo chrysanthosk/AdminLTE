@@ -12,7 +12,7 @@ $errorMsg   = '';
 $successMsg = '';
 
 // Fetch all service categories to populate dropdown & build import map
-$catStmt = $pdo->query('SELECT id, name FROM service_categories ORDER BY name');
+$catStmt = $pdo->query('SELECT id, name FROM pricelist_categories ORDER BY name');
 $categories = $catStmt->fetchAll(PDO::FETCH_ASSOC);
 $categoryMap = [];
 foreach ($categories as $c) {
@@ -266,7 +266,7 @@ $stmt = $pdo->query('
     p.price,
     p.created_at
   FROM pricelist p
-  JOIN service_categories sc ON p.category_id = sc.id
+  JOIN pricelist_categories sc ON p.category_id = sc.id
   ORDER BY p.created_at DESC
 ');
 $items = $stmt->fetchAll(PDO::FETCH_ASSOC);

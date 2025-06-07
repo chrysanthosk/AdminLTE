@@ -27,6 +27,7 @@ INSERT INTO roles (role_name, role_desc) VALUES
     ('service_category.manage', 'Create/Edit/Delete Service Category'),
    ('services.manage', 'Create/Edit/Delete Service'),
    ('pricelist.manage','Create/Edit/Delete Pricelist'),
+   ('pricelist_category.manage', 'Create/Edit/Delete Pricelist Category'),
    ('therapists.manage','Create/Edit/Delete Therapist'),
    ('calendar_view.view','Calendar View'),
    ('appointment.manage','Create/Edit/Delete Appointments'),
@@ -42,7 +43,7 @@ INSERT INTO roles (role_name, role_desc) VALUES
       ON p.permission_key IN ('user.manage','role.manage','email.manage','audit.view','profile.edit',
       'role.assign','permission.manage','module.manage','client.manage','vat.manage','product_category.manage',
       'product.manage','service_category.manage','services.manage','pricelist.manage','therapists.manage',
-      'calendar_view.view','appointment.manage','dash_settings.manage','cashier.manage','reports.view')
+      'calendar_view.view','appointment.manage','dash_settings.manage','cashier.manage','reports.view','pricelist_category.manage')
     WHERE r.role_name = 'admin';
 
   -- Optionally give “user” role only the “profile.edit” permission:
@@ -76,4 +77,5 @@ INSERT INTO roles (role_name, role_desc) VALUES
       ('Appointments','Appointments Page','fas fa-users','bg-info','appointments.php','appointment.manage',17),
       ('Dashboard Settings','Dashboard Settings Page','fas fa-users','bg-info','dashboard_settings.php','dash_settings.manage',18),
       ('Cashier ','Cashier  Page','fas fa-users','bg-info','cashier.php','cashier.manage',19),
-      ('Reports ','Reports Page','fas fa-users','bg-info','reports.php','reports.view',20);
+      ('Reports ','Reports Page','fas fa-users','bg-info','reports.php','reports.view',20),
+      ('PriceList Categories ','Create/Edit/Delete Pricelist Category','fas fa-users','bg-info','pricelist_categories.php','pricelist_category.manage',21);

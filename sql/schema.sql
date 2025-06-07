@@ -150,6 +150,13 @@ CREATE TABLE IF NOT EXISTS services (
   FOREIGN KEY (vat_type_id) REFERENCES vat_types(id) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE pricelist_categories (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS pricelist (
   id INT AUTO_INCREMENT PRIMARY KEY,
   category_id INT NOT NULL,
@@ -222,10 +229,6 @@ CREATE TABLE IF NOT EXISTS dashboard_settings (
   updated_at               TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                               ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ========================================================================
--- File: 2025_06_05_000002_create_cashier_tables.sql
--- ========================================================================
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- (A) Master “sales” table (one row per completed sale)
