@@ -48,23 +48,18 @@ $page_title = 'Permissions';
   <section class="content-header">
     <div class="container-fluid">
       <div class="row mb-2">
-        <div class="col-sm-6">
-          <h1>Permissions</h1>
-        </div>
+        <div class="col-sm-6"><h1>Permissions</h1></div>
+        <div class="col-sm-6 text-right">
+                <button class="btn btn-success" data-toggle="modal" data-target="#permModal" onclick="openCreateModal()">
+                  <i class="fas fa-plus"></i> Add Permission
+                </button>
+              </div>
       </div>
     </div>
   </section>
 
   <section class="content">
     <div class="container-fluid">
-
-      <!-- Button: Add New Permission -->
-      <div class="mb-3">
-        <button class="btn btn-success" data-toggle="modal" data-target="#permModal" onclick="openCreateModal()">
-          <i class="fas fa-plus"></i> Add Permission
-        </button>
-      </div>
-
       <!-- Permissions Table -->
       <table class="table table-bordered table-striped">
         <thead>

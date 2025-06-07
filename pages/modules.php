@@ -74,6 +74,11 @@ $page_title = 'Modules';
     <div class="container-fluid">
       <div class="row mb-2">
         <div class="col-sm-6"><h1>Modules</h1></div>
+        <div class="col-sm-6 text-right">
+            <button class="btn btn-success" data-toggle="modal" data-target="#modModal" onclick="openCreateModal()">
+                      <i class="fas fa-plus"></i> Add Module
+                    </button>
+                </div>
       </div>
     </div>
   </section>
@@ -81,14 +86,6 @@ $page_title = 'Modules';
   <!-- Main content -->
   <section class="content">
     <div class="container-fluid">
-
-      <!-- Button: Add New Module -->
-      <div class="mb-3">
-        <button class="btn btn-success" data-toggle="modal" data-target="#modModal" onclick="openCreateModal()">
-          <i class="fas fa-plus"></i> Add Module
-        </button>
-      </div>
-
       <!-- Modules Table -->
       <table class="table table-bordered table-striped">
         <thead>
@@ -196,6 +193,8 @@ $page_title = 'Modules';
                 <option value="fas fa-file-alt">Logs (fas fa-file-alt)</option>
                 <option value="fas fa-tachometer-alt">Dashboard (fas fa-tachometer-alt)</option>
                 <option value="fas fa-chart-bar">Reports (fas fa-chart-bar)</option>
+                <option value="fas fa-calendar">Calendar (fas fa-calendar)</option>
+
                 <!-- Add more Font Awesome classes as needed -->
               </select>
               <small class="form-text text-muted">Pick a Font Awesome icon.</small>

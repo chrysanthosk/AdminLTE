@@ -47,9 +47,12 @@ $page_title = 'Role Management';
   <section class="content-header">
     <div class="container-fluid">
       <div class="row mb-2">
-        <div class="col-sm-6">
-          <h1>Role Management</h1>
-        </div>
+        <div class="col-sm-6"><h1>Role Management</h1></div>
+        <div class="col-sm-6 text-right">
+              <button class="btn btn-success" data-toggle="modal" data-target="#roleModal" onclick="openCreateModal()">
+                  <i class="fas fa-user-plus"></i> Add New Role
+               </button>
+           </div>
       </div>
     </div>
   </section>
@@ -57,12 +60,7 @@ $page_title = 'Role Management';
   <section class="content">
     <div class="container-fluid">
 
-      <!-- Button to open “Add New Role” modal -->
-      <div class="mb-3">
-        <button class="btn btn-success" data-toggle="modal" data-target="#roleModal" onclick="openCreateModal()">
-          <i class="fas fa-plus"></i> Add New Role
-        </button>
-      </div>
+
 
       <!-- Roles Table -->
       <table class="table table-bordered table-striped">

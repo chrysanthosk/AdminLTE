@@ -1,26 +1,46 @@
 <?php
 // add_user.php - add a new user
 require_once '../auth.php';
-requireAdmin();
+requirePermission($pdo, 'user.manage');
 
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $username = $_POST['username'];
-    $email = $_POST['email'];
-    $password = $_POST['password'];
-    $role = $_POST['role'];
-    $first_name = $_POST['first_name'];
-    $last_name = $_POST['last_name'];
-    $theme = $_POST['theme'];
+    $username   = trim($_POST['username'] ?? '');
+    $email      = trim($_POST['email'] ?? '');
+    $password   = $_POST['password'] ?? '';
+    $roleId     = isset($_POST['role_id']) ? (int)$_POST['role_id'] : 0;
+    $first_name = trim($_POST['first_name'] ?? '');
+    $last_name  = trim($_POST['last_name'] ?? '');
+    $theme      = $_POST['theme'] ?? 'light';
 
-    $password_hash = password_hash($password, PASSWORD_DEFAULT);
-
-    $stmt = $pdo->prepare('INSERT INTO users (username, email, password_hash, role, first_name, last_name, theme) VALUES (?, ?, ?, ?, ?, ?, ?)');
-    $stmt->execute([$username, $email, $password_hash, $role, $first_name, $last_name, $theme]);
-    logAction($pdo, $_SESSION['user_id'], 'Added new user: ' . $username);
-    header('Location: users.php');
-    exit();
+    // Validate required fields
+    if (!$username || !$email || !$password || !$roleId) {
+        $error = 'Please fill in all required fields.';
+    } else {
+        // Hash password
+        $password_hash = password_hash($password, PASSWORD_DEFAULT);
+        // Insert into users table
+        $stmt = $pdo->prepare(
+            'INSERT INTO users (username, email, password_hash, role_id, first_name, last_name, theme) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        );
+        $stmt->execute([
+            $username,
+            $email,
+            $password_hash,
+            $roleId,
+            $first_name,
+            $last_name,
+            $theme
+        ]);
+        logAction($pdo, $_SESSION['user_id'], 'Added new user: ' . $username);
+        header('Location: users.php');
+        exit();
+    }
 }
+
+// Fetch roles for dropdown
+$roles = $pdo->query("SELECT id, role_name FROM roles ORDER BY role_name ASC")->fetchAll(PDO::FETCH_ASSOC);
+
 $page_title = 'Add User';
 ?>
 <?php include '../includes/header.php'; ?>
@@ -40,43 +60,60 @@ $page_title = 'Add User';
     <section class="content">
         <div class="container-fluid">
             <?php if ($error): ?>
-                <div class="alert alert-danger"><?php echo $error; ?></div>
+                <div class="alert alert-danger"><?= htmlspecialchars($error, ENT_QUOTES) ?></div>
             <?php endif; ?>
+
             <form method="post">
                 <div class="form-group">
-                    <label>Username</label>
-                    <input type="text" name="username" class="form-control" required>
+                    <label>Username<span class="text-danger">*</span></label>
+                    <input type="text" name="username" class="form-control" required
+                           value="<?= htmlspecialchars($_POST['username'] ?? '', ENT_QUOTES) ?>">
                 </div>
+
                 <div class="form-group">
-                    <label>Email</label>
-                    <input type="email" name="email" class="form-control" required>
+                    <label>Email<span class="text-danger">*</span></label>
+                    <input type="email" name="email" class="form-control" required
+                           value="<?= htmlspecialchars($_POST['email'] ?? '', ENT_QUOTES) ?>">
                 </div>
+
                 <div class="form-group">
-                    <label>Password</label>
+                    <label>Password<span class="text-danger">*</span></label>
                     <input type="password" name="password" class="form-control" required>
                 </div>
+
                 <div class="form-group">
-                    <label>Role</label>
-                    <select name="role" class="form-control">
-                        <option value="user">User</option>
-                        <option value="admin">Admin</option>
+                    <label>Role<span class="text-danger">*</span></label>
+                    <select name="role_id" class="form-control" required>
+                        <option value="">— Select a role —</option>
+                        <?php foreach ($roles as $r): ?>
+                            <option value="<?= $r['id'] ?>"
+                              <?= (isset($_POST['role_id']) && $_POST['role_id']==$r['id'])?'selected':'' ?>>
+                              <?= htmlspecialchars($r['role_name'], ENT_QUOTES) ?>
+                            </option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
+
                 <div class="form-group">
                     <label>First Name</label>
-                    <input type="text" name="first_name" class="form-control">
+                    <input type="text" name="first_name" class="form-control"
+                           value="<?= htmlspecialchars($_POST['first_name'] ?? '', ENT_QUOTES) ?>">
                 </div>
+
                 <div class="form-group">
                     <label>Last Name</label>
-                    <input type="text" name="last_name" class="form-control">
+                    <input type="text" name="last_name" class="form-control"
+                           value="<?= htmlspecialchars($_POST['last_name'] ?? '', ENT_QUOTES) ?>">
                 </div>
+
                 <div class="form-group">
                     <label>Theme</label>
                     <select name="theme" class="form-control">
-                        <option value="light">Light</option>
-                        <option value="dark">Dark</option>
+                        <option value="light" <?= (($_POST['theme'] ?? '')==='light')?'selected':'' ?>>Light</option>
+                        <option value="dark"  <?= (($_POST['theme'] ?? '')==='dark')?'selected':''  ?>>Dark</option>
                     </select>
                 </div>
+
                 <button type="submit" class="btn btn-success">Add User</button>
             </form>
         </div>

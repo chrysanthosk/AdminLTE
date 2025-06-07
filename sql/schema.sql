@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS users (
     username VARCHAR(50) UNIQUE NOT NULL,
     email VARCHAR(100) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
-    role ENUM('admin', 'user') DEFAULT 'user',
+    role_id INT NULL,
     first_name VARCHAR(50),
     last_name VARCHAR(50),
     theme ENUM('light', 'dark') DEFAULT 'light',
