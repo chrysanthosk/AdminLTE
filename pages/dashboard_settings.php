@@ -69,13 +69,13 @@ if (!$settings) {
   // If no row exists, insert defaults:
   $insert = $pdo->prepare("
     INSERT INTO dashboard_settings (
-      id,
+      id,dashboard_name
       company_name, company_vat_number, company_phone_number, company_address,
       sms_appointments_enabled, sms_appointments_message,
       sms_birthdays_enabled, sms_birthdays_message,
       sms_sent_appointments_count, sms_sent_birthdays_count
     ) VALUES (
-      1,
+      1,,'',
       '', '', '', '',
       0, '',
       0, '',
@@ -94,6 +94,7 @@ if (!$settings) {
 // ────────────────────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['pm_action'])) {
   // Collect and sanitize inputs:
+  $dashboardName        = trim($_POST['dashboard_name'] ?? '');
   $company_name         = trim($_POST['company_name'] ?? '');
   $company_vat_number   = trim($_POST['company_vat_number'] ?? '');
   $company_phone_number = trim($_POST['company_phone_number'] ?? '');
@@ -114,6 +115,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['pm_action'])) {
   // Update the row with id=1
   $update = $pdo->prepare("
     UPDATE dashboard_settings SET
+      dashboard_name             = :dashboard_name,
       company_name                 = :company_name,
       company_vat_number           = :company_vat_number,
       company_phone_number         = :company_phone_number,
@@ -125,6 +127,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['pm_action'])) {
     WHERE id = 1
   ");
   $update->execute([
+    'dashboard_name'           => $dashboardName,
     'company_name'               => $company_name,
     'company_vat_number'         => $company_vat_number,
     'company_phone_number'       => $company_phone_number,
@@ -176,6 +179,25 @@ $allPaymentMethods = $pmStmt->fetchAll(PDO::FETCH_ASSOC);
       <?php endif; ?>
 
       <form method="POST" action="dashboard_settings.php">
+<!-- Global Settings -->
+      <div class="card card-primary">
+        <div class="card-header">
+          <h3 class="card-title">Global Settings</h3>
+        </div>
+        <div class="card-body">
+          <div class="form-group">
+            <label for="dashboardName">Dashboard Name</label>
+            <input
+              type="text"
+              class="form-control"
+              id="dashboardName"
+              name="dashboard_name"
+              value="<?= htmlspecialchars($settings['dashboard_name'] ?? '', ENT_QUOTES) ?>"
+              placeholder="Enter a display name for your dashboard"
+            >
+          </div>
+        </div>
+      </div>
         <div class="row">
           <!-- ─── Left Column: Company Information ──────────────────────────────── -->
           <div class="col-md-6">

@@ -211,7 +211,7 @@ CREATE TABLE IF NOT EXISTS appointments (
 
 CREATE TABLE IF NOT EXISTS dashboard_settings (
   id INT AUTO_INCREMENT PRIMARY KEY,
-
+  dashboard_name` VARCHAR(255) NOT NULL DEFAULT '',
   company_name            VARCHAR(255) NOT NULL,
   company_vat_number      VARCHAR(50)  DEFAULT NULL,
   company_phone_number    VARCHAR(50)  DEFAULT NULL,
