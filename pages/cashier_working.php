@@ -86,7 +86,6 @@ $dataSql = "
     COALESCE(
       CONCAT(c.first_name,' ',c.last_name),
       CONCAT(ac.first_name,' ',ac.last_name),
-      a.client_name,
       'Walk-in'
     ) AS client_name,
     (
@@ -213,12 +212,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_sale'])) {
   $appointment_id      = null;
   $client_id           = null;
   $client_name         = null;
-  // if they selected an appointment, honor it unconditionally
-  if (!empty($_POST['appointment_id'])) {
-    $sale_type      = 'appointment';
-    $appointment_id = (int)$_POST['appointment_id'];
-  }
-
   if ($sale_type === 'appointment') {
     $appointment_id = !empty(trim($_POST['appointment_id'] ?? ''))
                       ? (int)$_POST['appointment_id']
@@ -436,7 +429,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_sale'])) {
               type="button"
               class="close"
               id="btnCloseAddSale"
-              data-dismiss="collapse"
+              data-toggle="collapse"
               data-target="#collapseAddSale"
               aria-label="Close"
             >
@@ -459,9 +452,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_sale'])) {
 
               <!-- Appointment dropdown (hidden by default) -->
               <div class="form-group" id="appointmentSection" style="display:none;">
-                <label for="appointment_id">Link to Today’s Appointment (optional)</label>
+                <label for="appointment_id_top">Link to Today’s Appointment (optional)</label>
                 <select
-                  id="appointment_id"
+                  id="appointment_id_top"
                   name="appointment_id"
                   class="form-control select2"
                   style="width: 100%;"
@@ -492,7 +485,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_sale'])) {
                     required
                   >
                 </div>
-
+                <div class="form-group col-md-8" style="display:none;">
+                  <label for="appointment_id">Link to Today’s Appointment (optional)</label>
+                  <select
+                    id="appointment_id"
+                    name="appointment_id"
+                    class="form-control select2"
+                    style="width: 100%;"
+                  >
+                    <option value="">-- No Appointment --</option>
+                    <?php foreach ($todayAppointments as $a): ?>
+                      <option value="<?= htmlspecialchars($a['id'], ENT_QUOTES, 'UTF-8') ?>">
+                        <?= htmlspecialchars($a['start_time'] . ' – ' . $a['client_label'], ENT_QUOTES, 'UTF-8') ?>
+                      </option>
+                    <?php endforeach; ?>
+                  </select>
+                </div>
               </div>
               <!-- ─── Section 1 End ──────────────────────────────────────────────────── -->
 
@@ -754,7 +762,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_sale'])) {
     });
 
     // (B) When an appointment is selected, copy its client data into hidden fields
-    $('#appointment_id').on('change', function(){
+    $('#appointment_id_top').on('change', function(){
       var apptId = $(this).val();
       if (!apptId) {
         $('#client_id').val('');
