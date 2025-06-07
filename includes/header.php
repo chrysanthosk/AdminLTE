@@ -110,6 +110,13 @@ $page_title = isset($page_title) ? $page_title : '';
 
     <!-- Right navbar links -->
     <ul class="navbar-nav ml-auto">
+    <!-- Profile Link -->
+      <li class="nav-item">
+        <a class="nav-link" href="/pages/profile.php" title="My Profile">
+          <i class="fas fa-user"></i>
+        </a>
+      </li>
+      <!-- Logout -->
       <li class="nav-item">
         <a class="nav-link" href="/logout.php">
           <i class="fas fa-sign-out-alt"></i> Logout
