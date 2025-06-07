@@ -4,157 +4,183 @@
 require_once '../auth.php';
 requirePermission($pdo, 'reports.view');
 
-$reportId = (int)($_GET['report_id'] ?? 0);
-if ($reportId <= 0) {
-  die("Invalid Z Report ID");
+// HTML helper
+if (!function_exists('h')) {
+  function h($s) {
+    return htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
+  }
 }
 
-// 1) Fetch Z-report row
-$stmt = $pdo->prepare("
-  SELECT date_from, date_to
-  FROM z_reports
-  WHERE id = :rid
-  LIMIT 1
-");
+// 1) Validate and fetch the Z-report metadata
+$reportId = (int)($_GET['report_id'] ?? 0);
+if ($reportId <= 0) {
+  die('Invalid Z Report ID');
+}
+$stmt = $pdo->prepare(
+  "SELECT report_number, date_from, date_to, created_at
+   FROM z_reports
+   WHERE id = :rid
+   LIMIT 1"
+);
 $stmt->execute(['rid' => $reportId]);
 $zr = $stmt->fetch(PDO::FETCH_ASSOC);
 if (!$zr) {
   die("Z Report #{$reportId} not found.");
 }
-$dateFrom = $zr['date_from'];
-$dateTo   = $zr['date_to'];
+$reportNumber = $zr['report_number'];
+$dateFrom     = $zr['date_from'];
+$dateTo       = $zr['date_to'];
+$createdAt    = $zr['created_at'];
 
-// 2) Fetch all sales in that date range
-$stmtSales = $pdo->prepare("
-  SELECT
-    s.id                                   AS sale_id,
-    s.sale_date,
-    COALESCE(
-      CONCAT(c.first_name, ' ', c.last_name),
-      'Walk-in'
-    ) AS client_name,
-    (
-      SELECT GROUP_CONCAT(
-        CONCAT(sv.name, ' (€', FORMAT(ss.unit_price,2), ')')
-        SEPARATOR ', '
-      )
-      FROM sale_services ss
-      JOIN services sv
-        ON ss.service_id = sv.id
-      WHERE ss.sale_id = s.id
-    ) AS services_list,
-    (
-      SELECT GROUP_CONCAT(
-        CONCAT(pv.name, ' (€', FORMAT(sp.unit_price,2), ')')
-        SEPARATOR ', '
-      )
-      FROM sale_products sp
-      JOIN products pv
-        ON sp.product_id = pv.id
-      WHERE sp.sale_id = s.id
-    ) AS products_list,
-    (s.services_subtotal + s.products_subtotal)   AS total_price,
-    (
-      SELECT IFNULL(SUM(amount), 0)
-      FROM sale_payments spay
-      WHERE spay.sale_id = s.id
-    ) AS paid_amount,
-    (
-      SELECT GROUP_CONCAT(payment_method SEPARATOR ', ')
-      FROM sale_payments spay
-      WHERE spay.sale_id = s.id
-    ) AS pay_methods
-  FROM sales s
-  LEFT JOIN clients c
-    ON s.client_id = c.id
-  WHERE DATE(s.sale_date) BETWEEN :date_from AND :date_to
-  ORDER BY s.sale_date ASC
-");
-$stmtSales->execute([
-  'date_from' => $dateFrom,
-  'date_to'   => $dateTo
-]);
-$sales = $stmtSales->fetchAll(PDO::FETCH_ASSOC);
+// 2) Fetch company settings
+$cfg = $pdo->query(
+  "SELECT company_name, company_vat_number, company_phone_number, company_address
+   FROM dashboard_settings
+   LIMIT 1"
+)->fetch(PDO::FETCH_ASSOC);
 
-// 3) Compute totals in PHP
-$totalSales    = 0.00;
-$totalPayments = 0.00;
-foreach ($sales as $row) {
-  $totalSales    += (float)$row['total_price'];
-  $totalPayments += (float)$row['paid_amount'];
-}
+// 3) Compute totals for the period
+$totStmt = $pdo->prepare(
+  "SELECT
+     COUNT(*) AS transactions_count,
+     IFNULL(SUM(grand_total),0) AS total_transactions
+   FROM sales
+   WHERE DATE(sale_date) BETWEEN :from AND :to"
+);
+$totStmt->execute(['from' => $dateFrom, 'to' => $dateTo]);
+$totals = $totStmt->fetch(PDO::FETCH_ASSOC);
 
-// 4) Fetch company info from dashboard_settings
-//    **Use the exact column names**. If your table has `company_telephone`, change accordingly.
-$settings = $pdo->query("
-  SELECT
-    company_name,
-    company_telephone
-  FROM dashboard_settings
-  LIMIT 1
-")->fetch(PDO::FETCH_ASSOC);
-$companyName       = $settings['company_name']      ?? '';
-$companyTelephone  = $settings['company_telephone'] ?? '';
+// 4) Compute net and VAT subtotals
+$subtotalsStmt = $pdo->prepare(
+  "SELECT
+     IFNULL(SUM(services_subtotal),0) AS services_net,
+     IFNULL(SUM(services_vat),0)       AS services_vat,
+     IFNULL(SUM(products_subtotal),0) AS products_net,
+     IFNULL(SUM(products_vat),0)       AS products_vat
+   FROM sales
+   WHERE DATE(sale_date) BETWEEN :from AND :to"
+);
+$subtotalsStmt->execute(['from' => $dateFrom, 'to' => $dateTo]);
+$subtotals = $subtotalsStmt->fetch(PDO::FETCH_ASSOC);
 
-// 5) Output thermal-printer styling
+// Calculate VAT percentages
+$servicesVatPct = $subtotals['services_net'] > 0
+  ? ($subtotals['services_vat'] / $subtotals['services_net']) * 100
+  : 0;
+$productsVatPct = $subtotals['products_net'] > 0
+  ? ($subtotals['products_vat'] / $subtotals['products_net']) * 100
+  : 0;
+
+// 5) Fetch payments breakdown
+$payStmt = $pdo->prepare(
+  "SELECT pm.name AS payment_method,
+          IFNULL(SUM(sp.amount),0) AS amount
+   FROM sale_payments sp
+   JOIN sales s ON sp.sale_id = s.id
+   JOIN payment_methods pm ON sp.payment_method = pm.name
+   WHERE DATE(s.sale_date) BETWEEN :from AND :to
+   GROUP BY pm.name"
+);
+$payStmt->execute(['from' => $dateFrom, 'to' => $dateTo]);
+$payments = $payStmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Z Report #<?= htmlspecialchars($reportId) ?></title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Z Report #<?= h($reportNumber) ?></title>
   <style>
-    body { font-family: Arial, sans-serif; font-size: 12px; margin: 5px; }
-    h2, h3 { text-align: center; margin: 4px 0; }
-    table { width: 100%; border-collapse: collapse; margin-top: 5px; }
-    th, td { padding: 2px 4px; }
-    th { border-bottom: 1px dashed #000; text-align: left; }
-    td { border-bottom: 1px solid #ddd; }
-    .totals { font-weight: bold; }
+    @page { size: 80mm auto; margin: 0; }
+    body { width:80mm; margin:0; font-family:monospace; font-size:12px; line-height:1.2; }
+    .center { text-align:center; }
+    .line { margin:4px 0; border-bottom:1px dashed #000; }
+    .section { margin:6px 0; }
+    .bold { font-weight:bold; }
+    .flex { display:flex; justify-content:space-between; }
+    .no-print { display:none; }
   </style>
 </head>
 <body>
-  <h2><?= htmlspecialchars($companyName) ?></h2>
-  <h3>Tel: <?= htmlspecialchars($companyTelephone) ?></h3>
-  <hr>
-  <p><strong>Z Report #<?= $reportId ?></strong></p>
-  <p>
-    <strong>Period:</strong>
-    <?= htmlspecialchars($dateFrom) ?>
-    to
-    <?= htmlspecialchars($dateTo) ?>
-  </p>
-  <hr>
+  <!-- Header -->
+  <div class="center bold"><?= h($cfg['company_name']) ?></div>
+  <div class="center"><?= h($cfg['company_address']) ?></div>
+  <div class="center">Tel: <?= h($cfg['company_phone_number']) ?></div>
+  <div class="center">VAT No: <?= h($cfg['company_vat_number']) ?></div>
+  <div class="line"></div>
 
-  <table>
-    <thead>
-      <tr>
-        <th>ID</th><th>Date &amp; Time</th><th>Client</th>
-        <th>Serv.</th><th>Prod.</th>
-        <th style="text-align:right;">Total (€)</th>
-        <th style="text-align:right;">Paid (€)</th>
-      </tr>
-    </thead>
-    <tbody>
-      <?php foreach ($sales as $row): ?>
-        <tr>
-          <td><?= $row['sale_id'] ?></td>
-          <td><?= date('Y-m-d H:i', strtotime($row['sale_date'])) ?></td>
-          <td><?= htmlspecialchars($row['client_name']) ?></td>
-          <td><?= $row['services_list'] ?: '-' ?></td>
-          <td><?= $row['products_list'] ?: '-' ?></td>
-          <td style="text-align:right;"><?= number_format($row['total_price'], 2) ?></td>
-          <td style="text-align:right;"><?= number_format($row['paid_amount'], 2) ?></td>
-        </tr>
-      <?php endforeach; ?>
-    </tbody>
-  </table>
+  <!-- Report Info -->
+  <div class="center bold">Z-Report #<?= h($reportNumber) ?></div>
+  <div class="center">Period: <?= date('d/m/Y', strtotime($dateFrom)) ?> — <?= date('d/m/Y', strtotime($dateTo)) ?></div>
+  <div class="center">Generated: <?= date('d/m/Y h:i A', strtotime($createdAt)) ?></div>
+  <div class="line"></div>
 
-  <hr>
-  <p class="totals">Sum of Sales: € <?= number_format($totalSales, 2) ?></p>
-  <p class="totals">Sum of Payments: € <?= number_format($totalPayments, 2) ?></p>
+  <!-- Aggregated Totals -->
+  <div class="section flex">
+    <span>Transactions:</span>
+    <span><?= (int)$totals['transactions_count'] ?></span>
+  </div>
+  <div class="section bold flex">
+    <span>Total Amount:</span>
+    <span>€ <?= number_format($totals['total_transactions'],2) ?></span>
+  </div>
+  <div class="line"></div>
 
-  <hr>
-  <p>*** End of Z Report ***</p>
+  <!-- Services Breakdown -->
+  <div class="section bold">Services</div>
+  <div class="flex">
+    <span>Net:</span>
+    <span>€ <?= number_format($subtotals['services_net'],2) ?></span>
+  </div>
+  <div class="flex">
+    <span>VAT <?= number_format($servicesVatPct,2) ?>%:</span>
+    <span>€ <?= number_format($subtotals['services_vat'],2) ?></span>
+  </div>
+  <div class="line"></div>
+
+  <!-- Products Breakdown -->
+  <div class="section bold">Products</div>
+  <div class="flex">
+    <span>Net:</span>
+    <span>€ <?= number_format($subtotals['products_net'],2) ?></span>
+  </div>
+  <div class="flex">
+    <span>VAT <?= number_format($productsVatPct,2) ?>%:</span>
+    <span>€ <?= number_format($subtotals['products_vat'],2) ?></span>
+  </div>
+  <div class="line"></div>
+
+  <!-- Totals Summation -->
+  <div class="section bold">Totals</div>
+  <div class="flex">
+    <span>Net Total:</span>
+    <span>€ <?= number_format(
+        $subtotals['services_net'] + $subtotals['products_net'], 2
+      ) ?></span>
+  </div>
+  <div class="flex">
+    <span>VAT Total:</span>
+    <span>€ <?= number_format(
+        $subtotals['services_vat'] + $subtotals['products_vat'], 2
+      ) ?></span>
+  </div>
+  <div class="line"></div>
+
+  <!-- Payments Received -->
+  <div class="section bold">Total Received by Payment Method</div>
+  <?php foreach ($payments as $p): ?>
+    <div class="flex">
+      <span><?= h($p['payment_method']) ?>:</span>
+      <span>€ <?= number_format($p['amount'],2) ?></span>
+    </div>
+  <?php endforeach; ?>
+  <div class="line"></div>
+
+  <!-- Footer -->
+  <div class="center bold">*** End of Z Report ***</div>
+
+  <script>
+    window.onload = function() { window.print(); };
+  </script>
 </body>
 </html>

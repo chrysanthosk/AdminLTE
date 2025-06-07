@@ -4,6 +4,57 @@
 require_once '../auth.php';
 requirePermission($pdo, 'reports.view');
 
+// Function to delete Z report
+if (isset($_GET['action']) && $_GET['action']==='delete_zreport' && !empty($_GET['id'])) {
+  $delId = (int)$_GET['id'];
+  // 1) Delete the Z‐Report record
+  $del = $pdo->prepare("DELETE FROM z_reports WHERE id = ?");
+  $del->execute([ $delId ]);
+  // 2) Redirect back to generated_zreports view
+  header("Location: reports.php?report=generated_zreports");
+  exit();
+}
+
+// If AJAX call to generate Z-report
+if ($_SERVER['REQUEST_METHOD']==='GET'
+  && $_GET['report']==='z_reports'
+  && isset($_GET['generate_zreport'])
+) {
+  try {
+    // 1) Compute next report_number
+    $nextStmt = $pdo->query("
+      SELECT COALESCE(MAX(report_number),0) + 1
+      FROM z_reports
+    ");
+    $nextNum = (int)$nextStmt->fetchColumn();
+
+    // 2) Insert date_from, date_to, report_number, created_at
+    $ins = $pdo->prepare("
+          INSERT INTO z_reports
+            (report_number, date_from, date_to, created_at)
+          VALUES
+            (:rn,           :from,     :to,     NOW())
+        ");
+        $ins->execute([
+          'rn'   => $nextNum,
+          'from' => $_GET['from_date'],
+          'to'   => $_GET['to_date']
+        ]);
+    // 3) Return the new ID (and you can also return the number if you like)
+
+    $newId = $pdo->lastInsertId();
+    header('Content-Type: application/json');
+    echo json_encode([
+          'success'      => true,
+          'report_id'    => $newId,
+          'report_number'=> $nextNum
+        ]);
+  } catch (Exception $e) {
+    header('Content-Type: application/json', true, 500);
+    echo json_encode(['success'=>false,'error'=>$e->getMessage()]);
+  }
+  exit();
+}
 
 // ────────────────────────────────────────────────────────────────────────────
 // (A) Which report (if any) was requested?
@@ -424,292 +475,251 @@ if ($selectedReport === 'top_clients_appts') {
    $stmt->execute();
    $cashAll = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-} elseif ($selectedReport === 'cashier_staff') {
-  // ─── C10: Cashier (Therapist) w/ date + therapist filters ──────────────
+}
+// ─── C10: Cashier (Therapist) w/ date + therapist filters ──────────────
+elseif ($selectedReport === 'cashier_staff') {
   $therapistId = (int)($_GET['therapist_id'] ?? 0);
-    $from_date   = $_GET['from_date']    ?? date('Y-m-d');
-    $to_date     = $_GET['to_date']      ?? date('Y-m-d');
+  $from_date   = $_GET['from_date'] ?? date('Y-m-d');
+  $to_date     = $_GET['to_date']   ?? date('Y-m-d');
 
-    // If a specific therapist was chosen (>0), restrict to sales they appear on
-    $whereTherapist = '';
-    if ($therapistId > 0) {
-      $whereTherapist = "
-        AND (
-          EXISTS (
-            SELECT 1
-            FROM sale_services ssx
-            WHERE ssx.sale_id = s.id
-              AND ssx.therapist_id = :tid
-          )
-          OR
-          EXISTS (
-            SELECT 1
-            FROM sale_products spx
-            WHERE spx.sale_id = s.id
-              AND spx.therapist_id = :tid
-          )
+  $whereTherapist = '';
+  if ($therapistId > 0) {
+    $whereTherapist = "
+      AND (
+        EXISTS (
+          SELECT 1 FROM sale_services ssx
+          WHERE ssx.sale_id = s.id
+            AND ssx.therapist_id = {$therapistId}
         )
-      ";
-    }
-
-    $sql = "
-      SELECT
-        s.id                                    AS sale_id,
-        s.sale_date,
-        COALESCE(
-          CONCAT(c.first_name, ' ', c.last_name),
-          'Walk-in'
-        ) AS client_name,
-        ANY_VALUE(
-          CONCAT(t.first_name, ' ', t.last_name)
-        ) AS therapist_name,
-        IFNULL(
-          GROUP_CONCAT(
-            DISTINCT CONCAT(sv.name, ' (€', FORMAT(ss.unit_price,2), ')')
-            SEPARATOR '<br>'
-          ),
-          ''
-        ) AS services_list,
-        IFNULL(
-          GROUP_CONCAT(
-            DISTINCT CONCAT(pv.name, ' (€', FORMAT(sp.unit_price,2), ')')
-            SEPARATOR '<br>'
-          ),
-          ''
-        ) AS products_list,
-        IFNULL(SUM(ss.line_total),0)
-        + IFNULL(SUM(sp.line_total),0)        AS total_price,
-        IFNULL((
-          SELECT SUM(amount)
-          FROM sale_payments spay
-          WHERE spay.sale_id = s.id
-        ), 0)                                AS paid_amount,
-        (
-          SELECT GROUP_CONCAT(payment_method SEPARATOR ', ')
-          FROM sale_payments spay
-          WHERE spay.sale_id = s.id
-        )                                     AS pay_methods
-      FROM sales s
-      LEFT JOIN clients c
-        ON s.client_id = c.id
-      LEFT JOIN sale_services ss
-        ON s.id = ss.sale_id
-      LEFT JOIN services sv
-        ON ss.service_id = sv.id
-      LEFT JOIN sale_products sp
-        ON s.id = sp.sale_id
-      LEFT JOIN products pv
-        ON sp.product_id = pv.id
-      LEFT JOIN therapists t
-        ON (t.id = ss.therapist_id OR t.id = sp.therapist_id)
-      WHERE DATE(s.sale_date) BETWEEN :from_date AND :to_date
-        $whereTherapist
-      GROUP BY s.id
-      ORDER BY s.sale_date DESC
+        OR
+        EXISTS (
+          SELECT 1 FROM sale_products spx
+          WHERE spx.sale_id = s.id
+            AND spx.therapist_id = {$therapistId}
+        )
+      )
     ";
+  }else {
+       $whereTherapist = '';
+     }
 
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindValue('from_date', $from_date);
-    $stmt->bindValue('to_date',   $to_date);
-    if ($therapistId > 0) {
-      $stmt->bindValue('tid', $therapistId, PDO::PARAM_INT);
-    }
-    $stmt->execute();
-    $cashStaff = $stmt->fetchAll(PDO::FETCH_ASSOC);
+  $sql = "
+    SELECT
+      s.id                   AS sale_id,
+      s.sale_date,
+      COALESCE(CONCAT(c.first_name,' ',c.last_name),'Walk-in') AS client_name,
+      ANY_VALUE(CONCAT(t.first_name,' ',t.last_name))         AS therapist_name,
+      IFNULL(GROUP_CONCAT(DISTINCT CONCAT(sv.name,' (€',FORMAT(ss.unit_price,2),')') SEPARATOR '<br>'), '') AS services_list,
+      IFNULL(GROUP_CONCAT(DISTINCT CONCAT(pv.name,' (€',FORMAT(sp.unit_price,2),')') SEPARATOR '<br>'), '') AS products_list,
+      IFNULL(SUM(ss.line_total),0) + IFNULL(SUM(sp.line_total),0) AS total_price,
+      IFNULL((SELECT SUM(amount) FROM sale_payments spay WHERE spay.sale_id = s.id),0) AS paid_amount,
+      (SELECT GROUP_CONCAT(payment_method SEPARATOR ', ') FROM sale_payments spay WHERE spay.sale_id = s.id) AS pay_methods
+    FROM sales s
+    LEFT JOIN clients c       ON s.client_id    = c.id
+    LEFT JOIN sale_services ss ON s.id          = ss.sale_id
+    LEFT JOIN services sv     ON ss.service_id   = sv.id
+    LEFT JOIN sale_products sp ON s.id          = sp.sale_id
+    LEFT JOIN products pv     ON sp.product_id   = pv.id
+    LEFT JOIN therapists t    ON (t.id = ss.therapist_id OR t.id = sp.therapist_id)
+    WHERE DATE(s.sale_date) BETWEEN :from_date AND :to_date
+      $whereTherapist
+    GROUP BY s.id
+    ORDER BY s.sale_date DESC
+  ";
 
-} elseif ($selectedReport === 'cashier_service') {
+  // **NO** bindValue() calls here — just prepare + execute
+  $stmt   = $pdo->prepare($sql);
+  $params = [
+    'from_date' => $from_date,
+    'to_date'   => $to_date
+  ];
+  $stmt->execute($params);
+  $cashStaff = $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+// ─── C11: Cashier (Service) w/ date + service filter ────────────────────
+elseif ($selectedReport === 'cashier_service') {
+  // 1) Read inputs
   $serviceId  = (int)($_GET['service_id'] ?? 0);
-    $from_date  = $_GET['from_date']  ?? date('Y-m-d');
-    $to_date    = $_GET['to_date']    ?? date('Y-m-d');
+  $from_date  = $_GET['from_date'] ?? date('Y-m-d');
+  $to_date    = $_GET['to_date']   ?? date('Y-m-d');
 
-    // Add this only if a specific service was chosen (>0)
-    $whereService = '';
-    if ($serviceId > 0) {
-      $whereService = "AND EXISTS (
+  // 2) Optional service filter (inlined so no placeholder needed)
+  if ($serviceId > 0) {
+    $whereService = "
+      AND EXISTS (
         SELECT 1
         FROM sale_services ssx
         WHERE ssx.sale_id = s.id
-          AND ssx.service_id = :sid1
-      )";
-    }
-
-    $sql = "
-      SELECT
-        s.id                                   AS sale_id,
-        s.sale_date,
-        COALESCE(
-          CONCAT(c.first_name, ' ', c.last_name),
-          'Walk-in'
-        ) AS client_name,
-        ANY_VALUE(
-          CONCAT(t.first_name, ' ', t.last_name)
-        ) AS therapist_name,
-        (
-          SELECT CONCAT(sv.name,' (€',FORMAT(ss2.unit_price,2),')')
-          FROM sale_services ss2
-          JOIN services sv
-            ON ss2.service_id = sv.id
-          WHERE ss2.sale_id = s.id
-            AND ss2.service_id = :sid2
-          LIMIT 1
-        ) AS service_name,
-        IFNULL(
-          GROUP_CONCAT(
-            DISTINCT CONCAT(pv.name,' (€',FORMAT(sp.unit_price,2),')')
-            SEPARATOR '<br>'
-          ),
-          ''
-        ) AS products_list,
-        (
-          SELECT IFNULL(SUM(ss3.line_total), 0)
-          FROM sale_services ss3
-          WHERE ss3.sale_id = s.id
-            AND ss3.service_id = :sid3
-        )
-        +
-        (
-          SELECT IFNULL(SUM(sp3.line_total), 0)
-          FROM sale_products sp3
-          WHERE sp3.sale_id = s.id
-        ) AS total_price,
-        IFNULL((
-          SELECT SUM(amount)
-          FROM sale_payments spay
-          WHERE spay.sale_id = s.id
-        ),0) AS paid_amount,
-        (
-          SELECT GROUP_CONCAT(payment_method SEPARATOR ', ')
-          FROM sale_payments spay
-          WHERE spay.sale_id = s.id
-        ) AS pay_methods
-      FROM sales s
-      LEFT JOIN clients c
-        ON s.client_id = c.id
-      LEFT JOIN sale_services ss
-        ON s.id = ss.sale_id
-      LEFT JOIN therapists t
-        ON ss.therapist_id = t.id
-      LEFT JOIN sale_products sp
-        ON s.id = sp.sale_id
-      LEFT JOIN products pv
-        ON sp.product_id = pv.id
-      WHERE DATE(s.sale_date) BETWEEN :from_date AND :to_date
-        $whereService
-      GROUP BY s.id
-      ORDER BY s.sale_date DESC
+          AND ssx.service_id = {$serviceId}
+      )
     ";
-
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindValue('from_date', $from_date);
-    $stmt->bindValue('to_date',   $to_date);
-
-    if ($serviceId > 0) {
-      $stmt->bindValue('sid1', $serviceId, PDO::PARAM_INT);
-      $stmt->bindValue('sid2', $serviceId, PDO::PARAM_INT);
-      $stmt->bindValue('sid3', $serviceId, PDO::PARAM_INT);
-    }
-
-    $stmt->execute();
-    $cashService = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-} elseif ($selectedReport === 'cashier_products') {
-  $productId  = (int)($_GET['product_id'] ?? 0);
-    $from_date  = $_GET['from_date']  ?? date('Y-m-d');
-    $to_date    = $_GET['to_date']    ?? date('Y-m-d');
-
-    // Only include the filter if productId > 0
-    $whereProduct = '';
-    if ($productId > 0) {
-      $whereProduct = "AND EXISTS (
+  }
+  else {
+    // at least one service of any kind
+    $whereService = "
+      AND EXISTS (
         SELECT 1
-        FROM sale_products spx
-        WHERE spx.sale_id = s.id
-          AND spx.product_id = :pid1
-      )";
-    }
-
-    $sql = "
-      SELECT
-        s.id                                   AS sale_id,
-        s.sale_date,
-        COALESCE(
-          CONCAT(c.first_name, ' ', c.last_name),
-          'Walk-in'
-        ) AS client_name,
-        ANY_VALUE(
-          CONCAT(t.first_name, ' ', t.last_name)
-        ) AS therapist_name,
-        IFNULL(
-          GROUP_CONCAT(
-            DISTINCT CONCAT(sv.name, ' (€', FORMAT(ss.unit_price,2), ')')
-            SEPARATOR '<br>'
-          ),
-          ''
-        ) AS services_list,
-        (
-          SELECT CONCAT(pv2.name,' (€',FORMAT(sp2.unit_price,2),')')
-          FROM sale_products sp2
-          JOIN products pv2
-            ON sp2.product_id = pv2.id
-          WHERE sp2.sale_id = s.id
-            AND sp2.product_id = :pid2
-          LIMIT 1
-        ) AS product_name,
-        (
-          SELECT IFNULL(SUM(ss2.line_total), 0)
-          FROM sale_services ss2
-          WHERE ss2.sale_id = s.id
-        )
-        +
-        (
-          SELECT IFNULL(SUM(sp3.line_total), 0)
-          FROM sale_products sp3
-          WHERE sp3.sale_id = s.id
-            AND sp3.product_id = :pid3
-        ) AS total_price,
-        IFNULL((
-          SELECT SUM(amount)
-          FROM sale_payments spay
-          WHERE spay.sale_id = s.id
-        ),0) AS paid_amount,
-        (
-          SELECT GROUP_CONCAT(payment_method SEPARATOR ', ')
-          FROM sale_payments spay
-          WHERE spay.sale_id = s.id
-        ) AS pay_methods
-      FROM sales s
-      LEFT JOIN clients c
-        ON s.client_id = c.id
-      LEFT JOIN sale_services ss
-        ON s.id = ss.sale_id
-      LEFT JOIN services sv
-        ON ss.service_id = sv.id
-      LEFT JOIN therapists t
-        ON ss.therapist_id = t.id
-      LEFT JOIN sale_products sp
-        ON s.id = sp.sale_id
-      LEFT JOIN products pv
-        ON sp.product_id = pv.id
-      WHERE DATE(s.sale_date) BETWEEN :from_date AND :to_date
-        $whereProduct
-      GROUP BY s.id
-      ORDER BY s.sale_date DESC
+        FROM sale_services ssx
+        WHERE ssx.sale_id = s.id
+      )
     ";
+  }
 
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindValue('from_date', $from_date);
-    $stmt->bindValue('to_date',   $to_date);
+  // 3) Build SQL—only :from_date and :to_date remain
+  $sql = "
+    SELECT
+      s.id                   AS sale_id,
+      s.sale_date,
+      COALESCE(CONCAT(c.first_name,' ',c.last_name),'Walk-in') AS client_name,
 
-    if ($productId > 0) {
-      $stmt->bindValue('pid1', $productId, PDO::PARAM_INT);
-      $stmt->bindValue('pid2', $productId, PDO::PARAM_INT);
-      $stmt->bindValue('pid3', $productId, PDO::PARAM_INT);
-    }
+      -- pull the service name directly via the join + ANY_VALUE()
+      ANY_VALUE(sv.name)     AS service_name,
 
-    $stmt->execute();
-    $cashProd = $stmt->fetchAll(PDO::FETCH_ASSOC);
+      -- list any products for completeness
+      IFNULL(
+        GROUP_CONCAT(
+          DISTINCT CONCAT(pv.name,' (€',FORMAT(sp.unit_price,2),')')
+          SEPARATOR '<br>'
+        ),
+        ''
+      ) AS products_list,
 
-} elseif ($selectedReport === 'z_reports') {
+      -- total price (services + products)
+      IFNULL(SUM(ss.line_total),0)
+      + IFNULL(SUM(sp.line_total),0)
+      AS total_price,
+
+      IFNULL((
+        SELECT SUM(amount)
+        FROM sale_payments spay
+        WHERE spay.sale_id = s.id
+      ),0) AS paid_amount,
+
+      (
+        SELECT GROUP_CONCAT(payment_method SEPARATOR ', ')
+        FROM sale_payments spay
+        WHERE spay.sale_id = s.id
+      ) AS pay_methods
+
+    FROM sales s
+    LEFT JOIN clients c       ON s.client_id    = c.id
+    LEFT JOIN sale_services ss ON s.id          = ss.sale_id
+    LEFT JOIN services sv     ON ss.service_id   = sv.id
+    LEFT JOIN sale_products sp ON s.id          = sp.sale_id
+    LEFT JOIN products pv     ON sp.product_id   = pv.id
+
+    WHERE DATE(s.sale_date) BETWEEN :from_date AND :to_date
+      $whereService
+
+    GROUP BY s.id
+    ORDER BY s.sale_date DESC
+  ";
+
+  // 4) Prepare & execute with only the two bound params
+  $stmt   = $pdo->prepare($sql);
+  $params = [
+    'from_date' => $from_date,
+    'to_date'   => $to_date
+  ];
+  $stmt->execute($params);
+
+  // 5) Fetch
+  $cashService = $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+ // ─── C12: Cashier (Product) w/ date + product filter ───────────────────
+ elseif ($selectedReport === 'cashier_products') {
+   // 1) Read inputs
+   $productId = (int)($_GET['product_id'] ?? 0);
+   $from_date = $_GET['from_date'] ?? date('Y-m-d');
+   $to_date   = $_GET['to_date']   ?? date('Y-m-d');
+
+   // 2) Always require at least one product; if a specific product is chosen, require that one
+   if ($productId > 0) {
+     $whereProduct = "
+       AND EXISTS (
+         SELECT 1
+         FROM sale_products spx
+         WHERE spx.sale_id    = s.id
+           AND spx.product_id = {$productId}
+       )
+     ";
+   } else {
+     $whereProduct = "
+       AND EXISTS (
+         SELECT 1
+         FROM sale_products spx
+         WHERE spx.sale_id = s.id
+       )
+     ";
+   }
+
+   // 3) Build the SQL; only :from_date and :to_date remain as placeholders
+   $sql = "
+     SELECT
+       s.id                   AS sale_id,
+       s.sale_date,
+       COALESCE(
+         CONCAT(c.first_name,' ',c.last_name),
+         'Walk-in'
+       ) AS client_name,
+
+       -- pick one service name if present
+       IFNULL(
+         GROUP_CONCAT(
+           DISTINCT CONCAT(sv.name,' (€',FORMAT(ss.unit_price,2),')')
+           SEPARATOR '<br>'
+         ),
+         '<span class=\"text-muted\">—</span>'
+       ) AS services_list,
+
+       -- any one product name
+       ANY_VALUE(
+         CONCAT(pv.name,' (€',FORMAT(sp.unit_price,2),')')
+       ) AS product_name,
+
+       -- total of services + products
+       IFNULL(SUM(ss.line_total),0)
+       + IFNULL(SUM(sp.line_total),0)
+       AS total_price,
+
+       IFNULL((
+         SELECT SUM(amount)
+         FROM sale_payments spay
+         WHERE spay.sale_id = s.id
+       ),0) AS paid_amount,
+
+       (
+         SELECT GROUP_CONCAT(payment_method SEPARATOR ', ')
+         FROM sale_payments spay
+         WHERE spay.sale_id = s.id
+       ) AS pay_methods
+
+     FROM sales s
+     LEFT JOIN clients c       ON s.client_id    = c.id
+     LEFT JOIN sale_services ss ON s.id          = ss.sale_id
+     LEFT JOIN services sv     ON ss.service_id   = sv.id
+     LEFT JOIN sale_products sp ON s.id          = sp.sale_id
+     LEFT JOIN products pv     ON sp.product_id   = pv.id
+
+     WHERE DATE(s.sale_date) BETWEEN :from_date AND :to_date
+       {$whereProduct}
+
+     GROUP BY s.id
+     ORDER BY s.sale_date DESC
+   ";
+
+   // 4) Prepare & execute with only from_date/to_date
+   $stmt   = $pdo->prepare($sql);
+   $params = [
+     'from_date' => $from_date,
+     'to_date'   => $to_date
+   ];
+   $stmt->execute($params);
+
+   // 5) Fetch
+   $cashProd = $stmt->fetchAll(PDO::FETCH_ASSOC);
+ }
+  elseif ($selectedReport === 'z_reports') {
   // ─── C13a: Z Reports → only show form here; no data fetch yet.
   if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $from_date = $_POST['from_date'] ?? date('Y-m-d');
@@ -1484,7 +1494,7 @@ if ($selectedReport === 'top_clients_appts') {
                     <td><?= $i++ ?></td>
                     <td><?= date('Y-m-d H:i', strtotime($row['sale_date'])) ?></td>
                     <td><?= htmlspecialchars($row['client_name']) ?></td>
-                    <td><?= htmlspecialchars($row['service_name'] ?: '&mdash;') ?></td>
+                    <td><?= $row['service_name'] ? htmlspecialchars($row['service_name'], ENT_QUOTES) : '&mdash;' ?></td>
                     <td><?= $row['products_list'] ?: '&mdash;' ?></td>
                     <td><?= number_format($row['total_price'],2) ?></td>
                     <td><?= number_format($row['paid_amount'],2) ?></td>
@@ -1602,7 +1612,11 @@ if ($selectedReport === 'top_clients_appts') {
               <input type="date" id="zr_date_from" name="zr_date_from" class="form-control mr-3" value="<?= date('Y-m-d') ?>" required>
               <label for="zr_date_to" class="mr-2">To:</label>
               <input type="date" id="zr_date_to" name="zr_date_to" class="form-control mr-3" value="<?= date('Y-m-d') ?>" required>
-              <button type="submit" name="generate_zreport" class="btn btn-primary">
+              <button
+                type="button"
+                id="btnGenerateZ"
+                class="btn btn-primary"
+              >
                 <i class="fas fa-file-invoice"></i> Generate Z Report
               </button>
             </form>
@@ -1678,6 +1692,30 @@ $(document).ready(function() {
   if ($.fn.select2) {
     $('.select2').select2({ width: '100%' });
   }
+});
+
+document.getElementById('btnGenerateZ').addEventListener('click', async () => {
+  // Grab the dates
+  const from = document.getElementById('zr_date_from').value;
+  const to   = document.getElementById('zr_date_to').value;
+
+  // 1) Call the same reports.php endpoint to generate the Z-report.
+  //    We pass generate_zreport=1 plus the dates.
+  const resp = await fetch(`reports.php?report=z_reports&generate_zreport=1&from_date=${from}&to_date=${to}`, {
+    credentials: 'same-origin'
+  });
+  // 2) Expect a JSON response { success: true, report_id: 42 }
+  const data = await resp.json();
+  if (!data.success) {
+    return alert('Error generating Z Report: ' + data.error);
+  }
+
+  // 3) Open the print popup with the new report_id
+  window.open(
+    `zreport_print.php?report_id=${data.report_id}`,
+    '_blank',
+    'toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes,width=320,height=600'
+  );
 });
 </script>
 </body>
