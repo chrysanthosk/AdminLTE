@@ -14,6 +14,12 @@ if (
 ) {
   // Return *only* the form+mini-calendar markup and the JS needed to make it work.
   ?>
+<style>
+      /* force your calendar element to fill its parent horizontally */
+      #appointmentsMainCalendar {
+        width: 100% !important;
+      }
+</style>
   <form id="appointmentForm">
         <div class="modal-content">
           <div class="modal-header">
@@ -718,6 +724,14 @@ $(document).ready(function() {
         eventClick: function(info) { /* future if needed */ }
       });
       mainCalendar.render();
+
+      $(document).on('collapsed.lte.pushmenu expanded.lte.pushmenu', function() {
+      setTimeout(() => mainCalendar.updateSize(), 300);
+      });
+
+     $('.main-sidebar').on('transitionend', () => {
+     mainCalendar.updateSize();
+     });
     });
 });
 </script>
