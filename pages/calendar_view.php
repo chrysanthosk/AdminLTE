@@ -10,9 +10,9 @@ requirePermission($pdo, 'appointment.manage');
 <!-- ─── CSS Includes ─────────────────────────────────────────────────────────────── -->
 
 <!-- FullCalendar Scheduler CSS (make sure these files exist under /assets/fullcalendar-scheduler/) -->
-<link href="/assets/fullcalendar-scheduler/main.min.css" rel="stylesheet"/>
-<link href="/assets/fullcalendar-scheduler/resource-timegrid.min.css" rel="stylesheet"/>
-
+<!--<link href="assets/fullcalendar-scheduler/main.min.css" rel="stylesheet"/>
+<link href="assets/fullcalendar-scheduler/resource-timegrid.min.css" rel="stylesheet"/>
+-->
 <!-- Select2 CSS (v4.0.13) -->
 <link href="https://cdn.jsdelivr.net/npm/select2@4.0.13/dist/css/select2.min.css" rel="stylesheet"/>
 
@@ -71,6 +71,10 @@ requirePermission($pdo, 'appointment.manage');
     border: 1px solid #ddd;
     background-color: #f9f9f9;
     margin-bottom: 15px;
+  }
+  /* force your calendar element to fill its parent horizontally */
+  #appointmentsMainCalendar {
+    width: 100% !important;
   }
 </style>
 
@@ -136,7 +140,7 @@ requirePermission($pdo, 'appointment.manage');
             LEFT JOIN clients c ON a.client_id = c.id
             LEFT JOIN users u ON a.staff_id = u.id
             LEFT JOIN services s ON a.service_id = s.id
-            WHERE DATE(a.start_time) = :today
+            WHERE a.appointment_date = :today
             ORDER BY a.start_time
           ");
           $stmt->execute(['today' => $today]);
@@ -525,6 +529,7 @@ $(document).ready(function() {
 
         // Define main views: 1-day / 3-day / 5-day / month
         initialView: 'resourceTimeGridDay',
+        height: window.innerHeight - 130,
         views: {
           resourceTimeGridDay: {
             type: 'resourceTimeGrid',
@@ -671,6 +676,14 @@ $(document).ready(function() {
         }
       });
       mainCalendar.render();
+
+      $(document).on('collapsed.lte.pushmenu expanded.lte.pushmenu', function() {
+        setTimeout(() => mainCalendar.updateSize(), 300);
+      });
+
+         $('.main-sidebar').on('transitionend', () => {
+              mainCalendar.updateSize();
+            });
     });
 });
 </script>
