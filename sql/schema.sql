@@ -349,3 +349,24 @@ CREATE TABLE IF NOT EXISTS `sale_payments` (
       ) ENGINE=InnoDB
         DEFAULT CHARSET=utf8mb4
         COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `sms_providers` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `name` VARCHAR(100)    NOT NULL,  -- e.g. “Twilio”, “Vonage (Nexmo)”
+  `doc_url` VARCHAR(255) NOT NULL,  -- link to API docs
+  `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+  `priority` INT NOT NULL DEFAULT 0,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE `sms_settings` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `provider_id` INT NOT NULL COMMENT 'FK → sms_providers.id',
+  `api_key` VARCHAR(255) NOT NULL,
+  `api_secret` VARCHAR(255) DEFAULT NULL,
+  `sender_id` VARCHAR(50)  DEFAULT NULL COMMENT 'e.g. SenderName or phone',
+  `is_enabled` TINYINT(1) NOT NULL DEFAULT 1,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT `fk_sms_settings_provider`
+    FOREIGN KEY (`provider_id`) REFERENCES `sms_providers`(`id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

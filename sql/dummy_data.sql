@@ -37,7 +37,8 @@ INSERT INTO roles (role_name, role_desc) VALUES
    ('appointment.manage','Create/Edit/Delete Appointments'),
    ('dash_settings.manage','Dashboard Settings'),
    ('cashier.manage','Cashier Module'),
-   ('reports.view','Reports');
+   ('reports.view','Reports'),
+   ('sms.manage','Sms Providers');
 
   -- Assign some default permissions to “admin” role (role_id=1 if that was seeded earlier)
   INSERT IGNORE INTO role_permissions (role_id, permission_id)
@@ -47,7 +48,7 @@ INSERT INTO roles (role_name, role_desc) VALUES
       ON p.permission_key IN ('user.manage','role.manage','email.manage','audit.view','profile.edit',
       'role.assign','permission.manage','module.manage','client.manage','vat.manage','product_category.manage',
       'product.manage','service_category.manage','services.manage','pricelist.manage','therapists.manage',
-      'calendar_view.view','appointment.manage','dash_settings.manage','cashier.manage','reports.view','pricelist_category.manage')
+      'calendar_view.view','appointment.manage','dash_settings.manage','cashier.manage','reports.view','pricelist_category.manage','sms.manage')
     WHERE r.role_name = 'admin';
 
   -- Optionally give “user” role only the “profile.edit” permission:
@@ -82,4 +83,11 @@ INSERT INTO roles (role_name, role_desc) VALUES
       ('Dashboard Settings','Dashboard Settings Page','fas fa-users','bg-info','dashboard_settings.php','dash_settings.manage',18),
       ('Cashier ','Cashier  Page','fas fa-users','bg-info','cashier.php','cashier.manage',19),
       ('Reports ','Reports Page','fas fa-users','bg-info','reports.php','reports.view',20),
-      ('PriceList Categories ','Create/Edit/Delete Pricelist Category','fas fa-users','bg-info','pricelist_categories.php','pricelist_category.manage',21);
+      ('PriceList Categories ','Create/Edit/Delete Pricelist Category','fas fa-users','bg-info','pricelist_categories.php','pricelist_category.manage',21),
+      ('SMS Providers ','SMS Provider Settings','fas fa-users','bg-info','sms_settings.php','sms.manage',22);
+
+INSERT INTO sms_providers (name, doc_url) VALUES
+  ('Twilio',     'https://www.twilio.com/docs/sms'),
+  ('Vonage',     'https://developer.vonage.com/messaging/sms/overview'),
+  ('Plivo',      'https://www.plivo.com/docs/sms'),
+  ('Infobip',    'https://www.infobip.com/docs/sms');

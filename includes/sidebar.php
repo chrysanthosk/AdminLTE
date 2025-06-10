@@ -78,6 +78,7 @@ $sections = [
     'items' => [
       ['perm'=>'dash_settings.manage','link'=>'dashboard_settings.php','text'=>'Dashboard Settings'],
       ['perm'=>'email.manage',        'link'=>'email_settings.php',     'text'=>'Email Settings'],
+      ['perm'=>'sms.manage',        'link'=>'sms_settings.php',     'text'=>'SMS Settings'],
     ]
   ],
 ];
