@@ -110,7 +110,27 @@ requirePermission($pdo, 'appointment.manage');
       </div>
     </div>
   </section>
-
+<?php
+    // Fetch today’s appointments (exact same logic as before)
+    $today = date('Y-m-d');
+    $stmt = $pdo->prepare("
+             SELECT
+                a.id,
+                a.start_time,
+                a.end_time,
+                IFNULL(CONCAT(c.first_name,' ',c.last_name), a.client_name) AS client_name,
+                CONCAT(t.first_name,' ',t.last_name)                  AS staff_name,
+                srv.name                                              AS service_name,
+                a.notes
+              FROM appointments a
+              LEFT JOIN clients    c   ON a.client_id   = c.id
+              LEFT JOIN therapists t   ON a.staff_id    = t.id
+              LEFT JOIN services   srv ON a.service_id  = srv.id
+              WHERE a.appointment_date = :today
+              ORDER BY a.start_time
+    ");
+    $stmt->execute(['today' => $today]);
+?>
   <!-- ─── Today’s Appointments Table ──────────────────────────────────────────────── -->
   <section class="content">
     <div class="container-fluid">
@@ -123,48 +143,48 @@ requirePermission($pdo, 'appointment.manage');
             <th>Staff</th>
             <th>Service</th>
             <th>Notes</th>
+            <th>Action</th>
           </tr>
         </thead>
         <tbody>
-          <?php
-          // Fetch today’s appointments (exact same logic as before)
-          $today = date('Y-m-d');
-          $stmt = $pdo->prepare("
-            SELECT
-              a.start_time, a.end_time,
-              COALESCE(c.first_name || ' ' || c.last_name, a.client_name) AS client_name,
-              u.first_name || ' ' || u.last_name AS staff_name,
-              s.name AS service_name,
-              a.notes
-            FROM appointments a
-            LEFT JOIN clients c ON a.client_id = c.id
-            LEFT JOIN users u ON a.staff_id = u.id
-            LEFT JOIN services s ON a.service_id = s.id
-            WHERE a.appointment_date = :today
-            ORDER BY a.start_time
-          ");
-          $stmt->execute(['today' => $today]);
-          while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-            $start = date('H:i', strtotime($row['start_time']));
-            $end   = date('H:i', strtotime($row['end_time']));
-            $timeRange = "{$start} – {$end}";
-            $client  = htmlspecialchars($row['client_name']);
-            $staff   = htmlspecialchars($row['staff_name']);
-            $service = htmlspecialchars($row['service_name']);
-            $notes   = htmlspecialchars($row['notes']);
-            echo "
-              <tr>
-                <td>{$timeRange}</td>
-                <td>{$client}</td>
-                <td>{$staff}</td>
-                <td>{$service}</td>
-                <td>{$notes}</td>
-              </tr>
-            ";
-          }
-          ?>
+          <?php while ($row = $stmt->fetch(PDO::FETCH_ASSOC)): ?>
+                <?php
+                  $start = date('H:i', strtotime($row['start_time']));
+                  $end   = date('H:i', strtotime($row['end_time']));
+                ?>
+                <tr>
+                  <td><?= htmlspecialchars("$start – $end", ENT_QUOTES) ?></td>
+                  <td><?= htmlspecialchars($row['client_name'], ENT_QUOTES) ?></td>
+                  <td><?= htmlspecialchars($row['staff_name'],  ENT_QUOTES) ?></td>
+                  <td><?= htmlspecialchars($row['service_name'],ENT_QUOTES) ?></td>
+                  <td><?= htmlspecialchars($row['notes'],       ENT_QUOTES) ?></td>
+                  <td>
+                    <button
+                     class="btn btn-sm btn-info btn-edit-apt"
+                     data-id="<?= $row['id'] ?>"
+                    >Edit</button>
+                    <button
+                     class="btn btn-sm btn-danger btn-del-apt"
+                     data-id="<?= $row['id'] ?>"
+                    >Delete</button>
+                  </td>
+                </tr>
+              <?php endwhile; ?>
         </tbody>
       </table>
+      <!-- Edit Appointment Modal -->
+      <div class="modal fade" id="editAptModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog"><div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Edit Appointment</h5>
+            <button type="button" class="close" data-dismiss="modal">&times;</button>
+          </div>
+          <div class="modal-body">
+            <!-- Loaded via AJAX -->
+            <div id="editAptBody" class="p-2">Loading…</div>
+          </div>
+        </div></div>
+      </div>
     </div>
   </section>
 </div> <!-- /.content-wrapper -->
@@ -685,5 +705,31 @@ $(document).ready(function() {
               mainCalendar.updateSize();
             });
     });
+ // ─── Edit button handler ───────────────────────────────
+  $('.btn-edit-apt').click(function(){
+    var id = $(this).data('id');
+    $('#editAptBody').load(
+      'edit_appointment.php?id=' + id,
+      function(resp, status){
+        if (status==='error') {
+          $('#editAptBody').html('Error loading form.');
+        }
+      }
+    );
+    $('#editAptModal').modal('show');
+  });
+
+  // ─── Delete button handler ─────────────────────────────
+  $('.btn-del-apt').click(function(){
+    if (!confirm('Delete this appointment?')) return;
+    var id = $(this).data('id');
+    $.post('delete_appointment.php', { id: id }, function(res){
+      if (res.success) {
+        mainCalendar.refetchEvents();
+      } else {
+        alert('Delete failed: '+res.error);
+      }
+    }, 'json');
+  });
 });
 </script>
