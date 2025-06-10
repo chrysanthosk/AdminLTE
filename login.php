@@ -24,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $ga = new PHPGangsta_GoogleAuthenticator();
                 if ($ga->verifyCode($user['twofa_secret'], $code, 2)) {
                     $_SESSION['user_id'] = $user['id'];
-                    $_SESSION['role']    = $user['role'];
+                    //$_SESSION['role']    = $user['role'];
                     logAction($pdo, $user['id'], 'Logged in with 2FA');
                     // Always send everyone to dashboard.php
                     header('Location: pages/dashboard.php');
@@ -36,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             // No 2FA: log in immediately
             $_SESSION['user_id'] = $user['id'];
-            $_SESSION['role']    = $user['role'];
+            //$_SESSION['role']    = $user['role'];
             logAction($pdo, $user['id'], 'Logged in');
             header('Location: pages/dashboard.php');
             exit();

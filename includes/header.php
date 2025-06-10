@@ -1,6 +1,7 @@
 <?php
 // includes/header.php — top section including CSS and Navbar
 require_once __DIR__ . '/../auth.php';
+//require_once __DIR__ . '/csrf.php';
 
 $user      = currentUser($pdo);
 $theme     = $user ? $user['theme'] : 'light';
@@ -100,7 +101,7 @@ $page_title = isset($page_title) ? $page_title : '';
       </li>
       <li class="nav-item d-none d-sm-inline-block">
         <!-- Here is the role check: -->
-        <?php if ($user && $user['role'] === 'admin'): ?>
+         <?php if ($user && ($user['role_name'] ?? '') === 'admin'): ?>
           <a href="/pages/dashboard.php" class="nav-link">Admin Panel</a>
         <?php else: ?>
           <a href="/pages/dashboard.php" class="nav-link">Home</a>
