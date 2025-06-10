@@ -57,18 +57,40 @@ CREATE TABLE IF NOT EXISTS role_permissions (
   UNIQUE KEY unique_role_perm (role_id, permission_id)
 );
 
-CREATE TABLE IF NOT EXISTS modules (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  title VARCHAR(100)        NOT NULL,     -- e.g. "Users"
-  description VARCHAR(255)   NOT NULL,     -- e.g. "Manage Users"
-  icon_class VARCHAR(100)    NOT NULL,     -- e.g. "fas fa-users"
-  box_color VARCHAR(50)      NOT NULL,     -- e.g. "bg-info" or "bg-warning"
-  link VARCHAR(255)          NOT NULL,     -- e.g. "users.php"
-  permission_key VARCHAR(100) NOT NULL,    -- e.g. "user.manage"
-  sort_order INT             NOT NULL DEFAULT 0,
-  created_at TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  is_active BOOLEAN          NOT NULL DEFAULT TRUE
-);
+DROP TABLE IF EXISTS `menu_sections`;
+CREATE TABLE `menu_sections` (
+  `id`           INT AUTO_INCREMENT PRIMARY KEY,
+  `section_key`  VARCHAR(50)   NOT NULL UNIQUE,
+  `label`        VARCHAR(100)  NOT NULL,
+  `icon_class`   VARCHAR(100)  NOT NULL,
+  `sort_order`   INT           NOT NULL DEFAULT 0,
+  `is_active`    TINYINT(1)    NOT NULL DEFAULT 1,
+  `created_at`   TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`   TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP
+                                ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+DROP TABLE IF EXISTS `modules`;
+CREATE TABLE `modules` (
+  `id`             INT AUTO_INCREMENT PRIMARY KEY,
+  `title`          VARCHAR(100)   NOT NULL,
+  `description`    VARCHAR(255)   NOT NULL,
+  `icon_class`     VARCHAR(100)   NOT NULL,
+  `box_color`      VARCHAR(50)    NOT NULL,
+  `link`           VARCHAR(255)   NOT NULL,
+  `permission_key` VARCHAR(100)   NOT NULL,
+  `sort_order`     INT            NOT NULL DEFAULT 0,
+  `section_id`     INT            NOT NULL,
+  `is_active`      TINYINT(1)     NOT NULL DEFAULT 1,
+  `created_at`     TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`     TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP
+                                  ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT `fk_modules_section`
+    FOREIGN KEY (`section_id`) REFERENCES `menu_sections`(`id`)
+      ON DELETE RESTRICT
+      ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 
 CREATE TABLE IF NOT EXISTS clients (
   id INT AUTO_INCREMENT PRIMARY KEY,

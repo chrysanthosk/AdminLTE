@@ -3,22 +3,9 @@
 
 require_once '../auth.php';
 requirePermission($pdo, 'module.manage');
-require_once __DIR__ . '/../includes/reusables.php';  // <— load $iconOptions
-
-// Fetch sections once, use for dropdown and validation
-$sections = $pdo
-  ->query('SELECT id, label FROM menu_sections WHERE is_active = 1 ORDER BY sort_order')
-  ->fetchAll(PDO::FETCH_ASSOC);
-$validSectionIds = array_column($sections, 'id');
-
-$section_options = $pdo
-  ->query('SELECT id, label FROM menu_sections WHERE is_active = 1 ORDER BY sort_order')
-  ->fetchAll(PDO::FETCH_ASSOC);
 
 // Handle Create / Update
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['delete_id'])) {
-
-    // Gather & sanitize inputs
     $mod_id         = isset($_POST['mod_id'])       ? (int)$_POST['mod_id']       : null;
     $title          = trim($_POST['title'] ?? '');
     $description    = trim($_POST['description'] ?? '');
@@ -30,15 +17,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['delete_id'])) {
     $section_id     = (int)($_POST['section_id'] ?? 0);
     $is_active      = isset($_POST['is_active'])   ? 1 : 0;
 
-    // Validate section_id against known IDs, default to first if invalid
-    if (!in_array($section_id, $validSectionIds, true)) {
-      $section_id = $validSectionIds[0] ?? 0;
-    }
-
-    // Only save if required fields are present
     if ($title !== '' && $link !== '' && $permission_key !== '' && $section_id > 0) {
         if ($mod_id > 0) {
-            // Update existing module
             $stmt = $pdo->prepare('
                 UPDATE modules
                    SET title = ?, description = ?, icon_class = ?, box_color = ?,
@@ -52,7 +32,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['delete_id'])) {
             ]);
             logAction($pdo, $_SESSION['user_id'], "Updated module ID $mod_id");
         } else {
-            // Insert new module
             $stmt = $pdo->prepare('
                 INSERT INTO modules
                     (title, description, icon_class, box_color, link,
@@ -67,7 +46,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['delete_id'])) {
             logAction($pdo, $_SESSION['user_id'], "Created new module ID $newId");
         }
     }
-
     header('Location: modules.php');
     exit();
 }
@@ -90,6 +68,11 @@ $stmt = $pdo->query('
   ORDER BY m.sort_order, m.id
 ');
 $all_modules = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Fetch sections for dropdown
+$sections = $pdo
+  ->query('SELECT id, label FROM menu_sections WHERE is_active = 1 ORDER BY sort_order')
+  ->fetchAll(PDO::FETCH_ASSOC);
 
 $page_title = 'Modules';
 ?>
@@ -126,7 +109,7 @@ $page_title = 'Modules';
         <tbody>
           <?php foreach ($all_modules as $m): ?>
           <tr>
-            <td><?= (int)($m['id'] ?? 0) ?></td>
+            <td><?= htmlspecialchars((int) ($m['id'] ?? 0) ?? '', ENT_QUOTES) ?></td>
             <td><?= htmlspecialchars($m['title'] ?? '', ENT_QUOTES) ?></td>
             <td><?= htmlspecialchars($m['description'] ?? '', ENT_QUOTES) ?></td>
             <td>
@@ -136,27 +119,27 @@ $page_title = 'Modules';
             <td><?= htmlspecialchars($m['box_color'] ?? '', ENT_QUOTES) ?></td>
             <td><?= htmlspecialchars($m['link'] ?? '', ENT_QUOTES) ?></td>
             <td><?= htmlspecialchars($m['permission_key'] ?? '', ENT_QUOTES) ?></td>
-            <td><?= (int)($m['sort_order'] ?? 0) ?></td>
+            <td><?= htmlspecialchars($m['sort_order'] ?? '0', ENT_QUOTES) ?></td>
             <td><?= htmlspecialchars($m['section_label'] ?? '', ENT_QUOTES) ?></td>
             <td>
-              <?= !empty($m['is_active'])
-                   ? '<span class="badge badge-success">Active</span>'
-                   : '<span class="badge badge-secondary">Inactive</span>' ?>
+              <?php echo !empty($m['is_active'])
+                        ? '<span class="badge badge-success">Active</span>'
+                        : '<span class="badge badge-secondary">Inactive</span>'; ?>
             </td>
             <td>
               <button class="btn btn-sm btn-info"
-                data-id="<?= (int)$m['id'] ?>"
-                data-title="<?= htmlspecialchars($m['title'],ENT_QUOTES) ?>"
-                data-description="<?= htmlspecialchars($m['description'],ENT_QUOTES) ?>"
-                data-icon_class="<?= htmlspecialchars($m['icon_class'],ENT_QUOTES) ?>"
-                data-box_color="<?= htmlspecialchars($m['box_color'],ENT_QUOTES) ?>"
-                data-link="<?= htmlspecialchars($m['link'],ENT_QUOTES) ?>"
-                data-permission_key="<?= htmlspecialchars($m['permission_key'],ENT_QUOTES) ?>"
-                data-sort_order="<?= (int)$m['sort_order'] ?>"
-                data-section_id="<?= (int)$m['section_id'] ?>"
-                data-is_active="<?= $m['is_active'] ? 1 : 0 ?>"
-                onclick="openEditModal(this)"
-              >
+                onclick="openEditModal(
+                  <?= (int)($m['id'] ?? 0) ?>,
+                  <?= json_encode($m['title'] ?? '') ?>,
+                  <?= json_encode($m['description'] ?? '') ?>,
+                  <?= json_encode($m['icon_class'] ?? '') ?>,
+                  <?= json_encode($m['box_color'] ?? '') ?>,
+                  <?= json_encode($m['link'] ?? '') ?>,
+                  <?= json_encode($m['permission_key'] ?? '') ?>,
+                  <?= (int)($m['sort_order'] ?? 0) ?>,
+                  <?= (int)($m['section_id'] ?? 0) ?>,
+                  <?= !empty($m['is_active']) ? 'true' : 'false' ?>
+                )">
                 <i class="fas fa-edit"></i> Edit
               </button>
               <form method="post" style="display:inline-block">
@@ -199,10 +182,8 @@ $page_title = 'Modules';
               <label>Section</label>
               <select name="section_id" id="section_id" class="form-control" required>
                 <option value="">— Choose Section —</option>
-                <?php foreach ($section_options as $sec): ?>
-                  <option value="<?= (int)$sec['id'] ?>">
-                   <?= htmlspecialchars($sec['label'], ENT_QUOTES) ?>
-                  </option>
+                <?php foreach ($sections as $sec): ?>
+                  <option value="<?= (int)($sec['id'] ?? 0) ?>">"><?= htmlspecialchars($sec['label'], ENT_QUOTES) ?></option>
                 <?php endforeach; ?>
               </select>
             </div>
@@ -214,27 +195,51 @@ $page_title = 'Modules';
           </div>
 
           <div class="form-row">
+            <!-- Icon Class dropdown -->
             <div class="form-group col-md-4">
               <label>Icon</label>
               <select name="icon_class" id="icon_class" class="form-control" required>
-                <?php foreach ($iconOptions as $cls=>$txt): ?>
-                  <option value="<?= htmlspecialchars($cls,ENT_QUOTES) ?>"><?= htmlspecialchars($txt,ENT_QUOTES) ?></option>
-                <?php endforeach; ?>
+                <option value="fas fa-users">Users</option>
+                <option value="fas fa-cubes">Cubes</option>
+                <option value="fas fa-user-md">User MD</option>
+                <option value="fas fa-user-tag">Roles</option>
+                <option value="fas fa-key">Role Perms</option>
+                <option value="fas fa-lock">Permissions</option>
+                <option value="fas fa-envelope">Email</option>
+                <option value="fas fa-file-alt">Logs</option>
+                <option value="fas fa-tachometer-alt">Dashboard</option>
+                <option value="fas fa-chart-bar">Reports</option>
+                <option value="fas fa-calendar">Calendar</option>
+                <option value="fas fa-sms">SMS</option>
+                <option value="fas fa-sliders-h">Sliders</option>
+                <option value="fas fa-cash-register">Cash Register</option>
+                <option value="fas fa-calendar-check">Calendar Check</option>
+                <option value="fas fa-calendar-alt">Calendar Alt</option>
+                <option value="fas fa-percent">Percent</option>
+                <option value="fas fa-tags">Tags</option>
+                <option value="fas fa-list">List</option>
+                <option value="fas fa-box-open">BoxOpen</option>
+                <option value="fas fa-concierge-bell">Bell</option>
+                <option value="fas fa-hands-helping">Help</option>
+                <option value="fas fa-list-alt">List Alt</option>
               </select>
             </div>
+
+            <!-- Box Color dropdown -->
             <div class="form-group col-md-4">
               <label>Box Color</label>
               <select name="box_color" id="box_color" class="form-control" required>
-                <option value="bg-info">bg-info (blue)</option>
-                <option value="bg-primary">bg-primary (dark blue)</option>
-                <option value="bg-secondary">bg-secondary (gray)</option>
-                <option value="bg-success">bg-success (green)</option>
-                <option value="bg-warning">bg-warning (yellow)</option>
-                <option value="bg-danger">bg-danger (red)</option>
-                <option value="bg-dark">bg-dark (black)</option>
-                <option value="bg-light">bg-light (light gray)</option>
+                <option value="bg-info">bg-info</option>
+                <option value="bg-primary">bg-primary</option>
+                <option value="bg-secondary">bg-secondary</option>
+                <option value="bg-success">bg-success</option>
+                <option value="bg-warning">bg-warning</option>
+                <option value="bg-danger">bg-danger</option>
+                <option value="bg-dark">bg-dark</option>
+                <option value="bg-light">bg-light</option>
               </select>
             </div>
+
             <div class="form-group col-md-4">
               <label>Link</label>
               <input type="text" name="link" id="link" class="form-control" placeholder="e.g. users.php" required>
@@ -264,37 +269,35 @@ $page_title = 'Modules';
 <?php include '../includes/footer.php'; ?>
 
 <script>
-// Create new
+// Open modal in “create new” mode
 function openCreateModal() {
-  $('#modModalLabel').text('Add Module');
-  $('#mod_id').val('');
-  $('#title').val('');
-  $('#description').val('');
-  $('#icon_class').val('fas fa-users');
-  $('#box_color').val('bg-info');
-  $('#link').val('');
-  $('#permission_key').val('');
-  $('#sort_order').val('0');
-  $('#is_active').prop('checked', true);
-  $('#section_id').val('');
+  document.getElementById('modModalLabel').innerText = 'Add Module';
+  document.getElementById('mod_id').value = '';
+  document.getElementById('title').value = '';
+  document.getElementById('description').value = '';
+  document.getElementById('icon_class').value = 'fas fa-users';
+  document.getElementById('box_color').value = 'bg-info';
+  document.getElementById('link').value = '';
+  document.getElementById('permission_key').value = '';
+  document.getElementById('sort_order').value = 0;
+  document.getElementById('is_active').checked = true;
+  document.getElementById('section_id').value = '';
   $('#modModal').modal('show');
 }
 
-// Edit existing
-function openEditModal(btn) {
-  // read data-attributes from button
-  var $b = $(btn);
-  $('#modModalLabel').text('Edit Module');
-  $('#mod_id').val($b.data('id'));
-  $('#title').val($b.data('title'));
-  $('#description').val($b.data('description'));
-  $('#icon_class').val($b.data('icon_class'));
-  $('#box_color').val($b.data('box_color'));
-  $('#link').val($b.data('link'));
-  $('#permission_key').val($b.data('permission_key'));
-  $('#sort_order').val($b.data('sort_order'));
-  $('#section_id').val($b.data('section_id'));
-  $('#is_active').prop('checked', $b.data('is_active') == 1);
+// Open modal in “edit” mode
+function openEditModal(id, title, desc, icon, color, link, permKey, sortOrder, isActive, sectionId) {
+  document.getElementById('modModalLabel').innerText = 'Edit Module';
+  document.getElementById('mod_id').value = id;
+  document.getElementById('title').value = title;
+  document.getElementById('description').value = desc;
+  document.getElementById('icon_class').value = icon;
+  document.getElementById('box_color').value = color;
+  document.getElementById('link').value = link;
+  document.getElementById('permission_key').value = permKey;
+  document.getElementById('sort_order').value = sortOrder;
+  document.getElementById('is_active').checked = isActive ? true : false;
+  document.getElementById('section_id').value = sectionId;
   $('#modModal').modal('show');
 }
 </script>

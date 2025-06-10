@@ -59,32 +59,54 @@ INSERT INTO roles (role_name, role_desc) VALUES
       ON p.permission_key = 'profile.edit'
     WHERE r.role_name = 'user';
 
+INSERT INTO `menu_sections` (section_key,label,icon_class,sort_order) VALUES
+ ('Admin',               'Admin',               'fas fa-cog',            1),
+ ('CRM',                 'CRM',                 'fas fa-users',          2),
+ ('Products & Pricing',  'Products & Pricing',  'fas fa-boxes',          3),
+ ('Sales',               'Sales',               'fas fa-cash-register',  4),
+ ('Reporting & Logs',    'Reporting & Logs',    'fas fa-chart-bar',      5),
+ ('Settings & Config',   'Settings & Config',   'fas fa-sliders-h',      6);
 
-    INSERT IGNORE INTO modules
-      (title, description, icon_class, box_color, link, permission_key, sort_order)
-    VALUES
-      ('Users', 'Manage Users', 'fas fa-users', 'bg-info', 'users.php', 'user.manage', 1),
-      ('Roles', 'Manage Roles', 'fas fa-user-tag', 'bg-primary', 'roles.php', 'role.manage', 2),
-      ('Role Perms', 'Assign Permissions to Roles', 'fas fa-key', 'bg-secondary', 'role_permissions.php', 'role.assign', 3),
-      ('Permissions', 'Manage Permissions', 'fas fa-lock', 'bg-success', 'permissions.php', 'permission.manage', 4),
-      ('Email', 'Email Settings', 'fas fa-envelope', 'bg-warning', 'email_settings.php', 'email.manage', 5),
-      ('Logs', 'Audit Log', 'fas fa-file-alt', 'bg-danger', 'audit_log.php', 'audit.view', 6),
-      ('Modules','Modules Page','fas fa-lock','bg-success','modules.php','module.manage',7),
-      ('Clients','Clients Page','fas fa-users','bg-info','clients.php','client.manage',8),
-      ('Vat','Vat Page','fas fa-users','bg-info','vat.php','vat.manage',9),
-      ('Product Category','Product Category Page','fas fa-users','bg-info','product_category.php','product_category.manage',10),
-      ('Products','Products Page','fas fa-users','bg-info','products.php','product.manage',11),
-      ('Service Category','Service Category Page','fas fa-users','bg-info','service_category.php','product.manage',12),
-      ('Services','Services Page','fas fa-users','bg-info','services.php','services.manage',13),
-      ('PriceList','PriceList Page','fas fa-users','bg-info','pricelist.php','pricelist.manage',14),
-      ('Therapists','Therapists Page','fas fa-users','bg-info','therapists.php','therapists.manage',15),
-      ('Calendar View','Calendar View Page','fas fa-users','bg-info','calendar_view.php','calendar_view.view',16),
-      ('Appointments','Appointments Page','fas fa-users','bg-info','appointments.php','appointment.manage',17),
-      ('Dashboard Settings','Dashboard Settings Page','fas fa-users','bg-info','dashboard_settings.php','dash_settings.manage',18),
-      ('Cashier ','Cashier  Page','fas fa-users','bg-info','cashier.php','cashier.manage',19),
-      ('Reports ','Reports Page','fas fa-users','bg-info','reports.php','reports.view',20),
-      ('PriceList Categories ','Create/Edit/Delete Pricelist Category','fas fa-users','bg-info','pricelist_categories.php','pricelist_category.manage',21),
-      ('SMS Providers ','SMS Provider Settings','fas fa-users','bg-info','sms_settings.php','sms.manage',22);
+
+INSERT INTO `modules`
+  (title, description, icon_class, box_color, link, permission_key, sort_order, section_id)
+VALUES
+  -- Admin (section_id = 1)
+  ('Users',        'Manage Users',                         'fas fa-users',       'bg-info', 'users.php',             'user.manage',               1, 1),
+  ('Roles',        'Manage Roles',                         'fas fa-user-tag',    'bg-primary','roles.php',             'role.manage',               2, 1),
+  ('Role Perms',   'Assign Permissions to Roles',          'fas fa-key',         'bg-secondary','role_permissions.php','role.assign',               3, 1),
+  ('Permissions',  'Manage Permissions',                   'fas fa-lock',        'bg-success','permissions.php',       'permission.manage',         4, 1),
+  ('Modules',      'Manage Application Modules & Menu',    'fas fa-cubes',       'bg-info', 'modules.php',           'module.manage',             5, 1),
+  ('Email',        'Email Settings',                       'fas fa-envelope',    'bg-warning','email_settings.php',    'email.manage',              6, 1),
+  ('Logs',         'Audit Log',                            'fas fa-file-alt',    'bg-danger', 'audit_log.php',        'audit.view',                7, 1),
+
+  -- CRM (section_id = 2)
+  ('Clients',      'Clients Page',                         'fas fa-users',       'bg-info', 'clients.php',           'client.manage',             8, 2),
+  ('Therapists',   'Therapists Page',                      'fas fa-user-md',     'bg-info', 'therapists.php',        'therapists.manage',         9, 2),
+  ('Calendar View','Calendar & Scheduler View',             'fas fa-calendar-alt','bg-info','calendar_view.php','calendar_view.view',      10,2),
+  ('Appointments', 'Manage Appointments',                  'fas fa-calendar-check','bg-info','appointments.php','appointment.manage',    11,2),
+
+  -- Products & Pricing (section_id = 3)
+  ('VAT Types',            'Manage VAT Types',               'fas fa-percent',    'bg-info',   'vat.php',                 'vat.manage',               12,3),
+  ('Product Categories',   'Product Categories Page',        'fas fa-tags',       'bg-info',   'product_category.php',    'product_category.manage',  13,3),
+  ('Products',             'Products Page',                  'fas fa-box-open',   'bg-info',   'products.php',            'product.manage',           14,3),
+  ('Service Categories',   'Service Category Page',          'fas fa-concierge-bell','bg-info','service_category.php', 'service_category.manage', 15,3),
+  ('Services',             'Services Page',                  'fas fa-hands-helping','bg-info','services.php',          'services.manage',          16,3),
+  ('Pricelist',            'Price List Page',                'fas fa-list-alt',   'bg-info',   'pricelist.php',           'pricelist.manage',         17,3),
+  ('Pricelist Categories', 'Pricelist Categories Page',      'fas fa-list',       'bg-info',   'pricelist_categories.php','pricelist_category.manage',18,3),
+  ('SMS Providers',        'SMS Provider Settings',          'fas fa-sms',        'bg-info',   'sms_settings.php',       'sms.manage',              19,3),
+
+  -- Sales (section_id = 4)
+  ('Cashier', 'Cashier Page', 'fas fa-cash-register', 'bg-info', 'cashier.php', 'cashier.manage', 20,4),
+
+  -- Reporting & Logs (section_id = 5)
+  ('Reports', 'Reports Page', 'fas fa-chart-bar', 'bg-info', 'reports.php', 'reports.view', 21,5),
+
+  -- Settings & Config (section_id = 6)
+  ('Dashboard Settings', 'Dashboard Settings Page','fas fa-sliders-h','bg-info','dashboard_settings.php','dash_settings.manage',22,6),
+  ('Email Settings',     'Email Settings Page',     'fas fa-envelope','bg-info','email_settings.php','email.manage',     23,6),
+  ('SMS Settings',     'SMS Provider Configuration',     'fas fa-sms','bg-info','sms_settings.php','sms.manage',     24,6),
+  ('SideMenu Settings',     'SideMenu Configuration',     'fas fa-cubes','bg-info','sidemenu.php','module.manage',     25,1);
 
 INSERT INTO sms_providers (name, doc_url) VALUES
   ('Twilio',     'https://www.twilio.com/docs/sms'),
