@@ -1,61 +1,74 @@
-# AdminLTE PHP/MySQL Dashboard
+## AdminLTE PHP/MySQL Dashboard
+
 A fully-featured administrative dashboard built on AdminLTE, PHP, and MySQL with robust Role-Based Access Control (RBAC), modular dashboard widgets, and SMTP testing functionality.
 
 ## Table of Contents
-1. [Overview](#overview)
-2. [Features](#features)
-3. [Requirements](#requirements)
-4. [Installation](#installation)
-    - [1. Clone or Upload Project](#1-clone-or-upload-project)
-    - [2. Run install.sh](#2-run-installsh)
-    - [3. Verify Installation](#3-verify-installation)
-5. [Configuration](#configuration)
-    - [Database (`db.php`)](#database-dbphp)
-    - [Email Settings](#email-settings)
-6. [Database Schema](#database-schema)
-    - [Users & Authentication](#users--authentication)
-    - [RBAC Tables](#rbac-tables)
-    - [Modules Table](#modules-table)
-    - [Email Settings Table](#email-settings-table)
-    - [Audit Log Table](#audit-log-table)
-7. [Project Structure](#project-structure)
-8. [Usage](#usage)
-    - [Login & Dashboard](#login--dashboard)
-    - [Roles & Permissions](#roles--permissions)
-    - [Modules Management](#modules-management)
-    - [Email Settings & SMTP Test](#email-settings--smtp-test)
-9. [Customizing](#customizing)
-10. [Support & Logs](#support--logs)
-11. [License](#license)
+1. Overview
+2. Features
+3. Requirements
+4. Installation
+    * Clone or Upload Project
+    * Run `install.sh`
+    * Verify Installation
+5. Configuration
+    * Database (`db.php`)
+    * Email Settings
+6. Database Schema
+    * Users & Authentication
+    * RBAC Tables
+    * Modules Table
+    * Email Settings Table
+    * Audit Log Table
+7. Project Structure
+8. Usage
+    * Login & Dashboard
+    * Roles & Permissions
+    * Modules Management
+    * Email Settings & SMTP Test
+9. Customizing
+10. Support & Logs
+11. License
 
 ## Overview
+
 This project provides a pre-built administrative interface using AdminLTE for the frontend and PHP/MySQL for the backend. It supports:
-- **User Authentication** (login, logout, forgot password)
-- **Role-Based Access Control (RBAC)** (roles, permissions, role_permission assignments)
-- **Dynamic Dashboard Widgets** via a `modules` table
-- **Email Settings** with SMTP test functionality using PHPMailer
-- **Audit Logging** for critical actions.
-- **Two-Factor Authentication (2FA)** via Google Authenticator
+
+- User Authentication (login, logout, forgot password)
+- Role-Based Access Control (RBAC) (roles, permissions, role_permission assignments)
+- Dynamic Dashboard Widgets via a `modules` table
+- Email Settings with SMTP test functionality using PHPMailer
+- Audit Logging for critical actions
+- Two-Factor Authentication (2FA) via Google Authenticator
 
 All features are accessed through a single `dashboard.php`, with displayed widgets depending on the logged-in user’s permissions.
 
+
 ## Features
+
 - **Single Dashboard**: All users go to `dashboard.php`; widgets render dynamically based on permissions.
 - **RBAC**:
-    - **roles** table stores roles (e.g., `admin`, `user`, `manager`).
-    - **permissions** table stores permission keys (e.g., `user.manage`, `role.manage`).
-    - **role_permissions** links roles ↔ permissions.
+    - `roles` table stores roles (e.g., `admin`, `user`, `manager`).
+    - `permissions` table stores permission keys (e.g., `user.manage`, `module.manage`).
+    - `role_permissions` links roles ↔ permissions.
 - **Modules**:
     - A `modules` table defines dashboard widgets (title, description, icon, color, link, permission_key, sort_order, is_active).
-    - **Modules Management** page to CRUD modules and toggle active/inactive.
+    - Modules Management page to CRUD modules and toggle active/inactive.
+    - **Available Modules by Section**:
+        - **Admin**: Users, Roles, Role Perms, Permissions, Modules, Email Settings, Audit Log
+        - **CRM**: Clients, Therapists, Calendar View, Appointments
+        - **Products & Pricing**: VAT Types, Product Categories, Products, Service Categories, Services, Pricelist, Pricelist Categories, SMS Providers
+        - **Sales**: Cashier
+        - **Reporting & Logs**: Reports
+        - **Settings & Config**: Dashboard Settings, Email Settings, SMS Settings, SideMenu Settings
 - **Email Settings**:
     - A `email_settings` table holds SMTP host, port, username, password, secure (`tls`/`ssl`), `from_email`, and `from_name`.
-    - **Email Settings** page to configure SMTP and test via PHPMailer.
+    - Email Settings page to configure SMTP and test via PHPMailer.
 - **Audit Log**: Tracks user actions (e.g., creating roles, updating settings).
 - **2FA**: Google Authenticator integration for optional two-factor authentication.
 - **Install Script**: `install.sh` automates server setup, DB creation, `db.php` generation, Nginx config, SSL, Composer, and PHPMailer installation across Debian/Ubuntu and RHEL/CentOS/Fedora.
 
 ## Requirements
+
 - Debian/Ubuntu or RHEL/CentOS/Fedora-based Linux
 - Nginx (default site disabled)
 - MySQL (or MariaDB) server
@@ -66,7 +79,8 @@ All features are accessed through a single `dashboard.php`, with displayed widge
 
 ## Installation
 
-### 1. Clone or Upload Project
+### Clone or Upload Project
+
 - Place your project source files (including `install.sh`, `pages/`, `includes/`, etc.) on the server.
 - Ensure `install.sh` has execute permissions:
   ```bash
