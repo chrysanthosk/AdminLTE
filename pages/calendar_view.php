@@ -147,54 +147,29 @@ requirePermission($pdo, 'appointment.manage');
           </tr>
         </thead>
         <tbody>
-          <?php while ($row = $stmt->fetch(PDO::FETCH_ASSOC)): ?>
-                <?php
-                  $start = date('H:i', strtotime($row['start_time']));
-                  $end   = date('H:i', strtotime($row['end_time']));
-                ?>
-                <tr>
-                  <td><?= htmlspecialchars("$start – $end", ENT_QUOTES) ?></td>
-                  <td><?= htmlspecialchars($row['client_name'], ENT_QUOTES) ?></td>
-                  <td><?= htmlspecialchars($row['staff_name'],  ENT_QUOTES) ?></td>
-                  <td><?= htmlspecialchars($row['service_name'],ENT_QUOTES) ?></td>
-                  <td><?= htmlspecialchars($row['notes'],       ENT_QUOTES) ?></td>
-                  <td>
-                    <button
-                     class="btn btn-sm btn-info btn-edit-apt"
-                     data-id="<?= $row['id'] ?>"
-                    >Edit</button>
-                    <button
-                     class="btn btn-sm btn-danger btn-del-apt"
-                     data-id="<?= $row['id'] ?>"
-                    >Delete</button>
-                  </td>
-                </tr>
-              <?php endwhile; ?>
+           <?php while ($row = $stmt->fetch(PDO::FETCH_ASSOC)):
+             $start = date('H:i', strtotime($row['start_time']));
+             $end   = date('H:i', strtotime($row['end_time']));
+           ?>
+           <tr>
+             <td><?= htmlspecialchars("$start – $end",ENT_QUOTES) ?></td>
+             <td><?= htmlspecialchars($row['client_name'],ENT_QUOTES) ?></td>
+             <td><?= htmlspecialchars($row['staff_name'],ENT_QUOTES) ?></td>
+             <td><?= htmlspecialchars($row['service_name'],ENT_QUOTES) ?></td>
+             <td><?= htmlspecialchars($row['notes'],ENT_QUOTES) ?></td>
+            <td>
+              <button class="btn btn-sm btn-info edit-apt-btn" data-id="<?= (int)$row['id'] ?>">Edit</button>
+              <button class="btn btn-sm btn-danger delete-apt-btn" data-id="<?= (int)$row['id'] ?>">Delete</button>
+            </td>
+           </tr>
+           <?php endwhile; ?>
         </tbody>
       </table>
-      <!-- Edit Appointment Modal -->
-      <div class="modal fade" id="editAptModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog"><div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">Edit Appointment</h5>
-            <button type="button" class="close" data-dismiss="modal">&times;</button>
-          </div>
-          <div class="modal-body">
-            <!-- Loaded via AJAX -->
-            <div id="editAptBody" class="p-2">Loading…</div>
-          </div>
-        </div></div>
-      </div>
-    </div>
-  </section>
-</div> <!-- /.content-wrapper -->
-
-<!-- ──────────── “Add Appointment” Modal ──────────────────────────────────────────── -->
+  <!-- ──────────── “Add Appointment” Modal ──────────────────────────────────────────── -->
 <div class="modal fade" id="addApptModal" tabindex="-1" role="dialog" aria-labelledby="addApptModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg" role="document">
     <div class="modal-content">
       <div class="modal-header">
-        <!--<h5 class="modal-title" id="addApptModalLabel">Add New Appointment</h5> -->
         <button type="button" class="close" data-dismiss="modal" aria-label="Close">
           <span aria-hidden="true">&times;</span>
         </button>
@@ -209,6 +184,25 @@ requirePermission($pdo, 'appointment.manage');
       </div>
     </div>
   </div>
+</div>
+
+<!-- Edit Appointment Modal -->
+      <div class="modal fade" id="editAppointmentModal" tabindex="-1" aria-labelledby="editAppointmentLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="editAppointmentLabel">Edit Appointment</h5>
+              <button type="button" class="close" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+              <!-- form content will load here via AJAX -->
+              <div id="editAppointmentBody" class="p-3">Loading…</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
 </div>
 
 <?php include '../includes/footer.php'; ?>
@@ -705,31 +699,44 @@ $(document).ready(function() {
               mainCalendar.updateSize();
             });
     });
- // ─── Edit button handler ───────────────────────────────
-  $('.btn-edit-apt').click(function(){
-    var id = $(this).data('id');
-    $('#editAptBody').load(
-      'edit_appointment.php?id=' + id,
-      function(resp, status){
-        if (status==='error') {
-          $('#editAptBody').html('Error loading form.');
-        }
-      }
-    );
-    $('#editAptModal').modal('show');
-  });
+   // ---- EDIT ----
+        // ─── Edit appointment ─────────────────────────
+         $('.edit-apt-btn').on('click', function(){
+           const id = $(this).data('id');
+           // Load the edit form via AJAX into the modal
+           $('#editAppointmentModal .modal-body')
+             .load('/pages/edit_appointment.php?id=' + id, function(){
+                $('#editAppointmentModal').modal('show');
+             });
+         });
 
-  // ─── Delete button handler ─────────────────────────────
-  $('.btn-del-apt').click(function(){
-    if (!confirm('Delete this appointment?')) return;
-    var id = $(this).data('id');
-    $.post('delete_appointment.php', { id: id }, function(res){
-      if (res.success) {
-        mainCalendar.refetchEvents();
-      } else {
-        alert('Delete failed: '+res.error);
-      }
-    }, 'json');
-  });
+     // Delegate save button inside dynamically loaded content
+       //$(document).on('click','#saveAppointmentBtn',function(){
+       //  var f = $('#editAppointmentBody').find('form');
+        // $.post('save_appointment.php', f.serialize(), function(resp){
+         //  if(resp.success){
+          //   $('#editAppointmentModal').modal('hide');
+           //  mainCalendar.refetchEvents();
+           //} else {
+            // alert('Error: '+resp.error);
+          // }
+        // },'json');
+       //});
+
+      // ─── Delete appointment ────────────────────────
+       $('.delete-apt-btn').on('click', function(){
+         const id = $(this).data('id');
+         if (!confirm('Delete this appointment?')) return;
+         $.post('/pages/delete_appointment.php', { id: id }, function(resp){
+           if (resp.success) {
+             mainCalendar.refetchEvents();
+             // Optionally also remove from Today’s table:
+             // location.reload();
+           } else {
+             alert('Delete failed: ' + resp.error);
+           }
+         }, 'json');
+       });
+
 });
 </script>

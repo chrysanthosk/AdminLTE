@@ -13,10 +13,13 @@ if ($id <= 0) {
 
 // 2) Fetch the appointment
 $stmt = $pdo->prepare("
-  SELECT *
-    FROM appointments
-   WHERE id = ?
-   LIMIT 1
+  SELECT
+    a.*,
+    COALESCE(CONCAT(c.first_name,' ',c.last_name), a.client_name) AS full_client_name
+  FROM appointments a
+  LEFT JOIN clients c ON a.client_id = c.id
+  WHERE a.id = ?
+  LIMIT 1
 ");
 $stmt->execute([$id]);
 $apt = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -27,12 +30,6 @@ if (!$apt) {
 }
 
 // 3) Fetch dropdown data
-$clients = $pdo->query("
-  SELECT id, first_name, last_name
-    FROM clients
-   ORDER BY first_name, last_name
-")->fetchAll(PDO::FETCH_ASSOC);
-
 $therapists = $pdo->query("
   SELECT id, first_name, last_name
     FROM therapists
@@ -46,124 +43,120 @@ $services = $pdo->query("
    ORDER BY name
 ")->fetchAll(PDO::FETCH_ASSOC);
 
-// 4) Output the form fields fragment
+// 4) Output the **entire** form (matching add form’s ID!)
 ?>
-<input type="hidden" name="id" value="<?= $apt['id'] ?>">
+<form id="assignFormEdit">
+  <input type="hidden" name="id" value="<?= (int)$apt['id'] ?>">
 
-<div class="form-group">
-  <label>Date</label>
-  <input
-    type="date"
-    name="appointment_date"
-    class="form-control"
-    value="<?= htmlspecialchars($apt['appointment_date']) ?>"
-    required
-  >
-</div>
-
-<div class="form-row">
-  <div class="form-group col-md-6">
-    <label>Start Time</label>
+  <div class="form-group">
+    <label>Date</label>
     <input
-      type="time"
-      name="start_time"
+      type="date"
+      name="appointment_date"
       class="form-control"
-      value="<?= htmlspecialchars($apt['start_time']) ?>"
+      value="<?= htmlspecialchars($apt['appointment_date']) ?>"
       required
     >
   </div>
-  <div class="form-group col-md-6">
-    <label>End Time</label>
+
+  <div class="form-row">
+    <div class="form-group col-md-6">
+      <label>Start Time</label>
+      <input
+        type="time"
+        name="start_time"
+        class="form-control"
+        value="<?= htmlspecialchars($apt['start_time']) ?>"
+        required
+      >
+    </div>
+    <div class="form-group col-md-6">
+      <label>End Time</label>
+      <input
+        type="time"
+        name="end_time"
+        class="form-control"
+        value="<?= htmlspecialchars($apt['end_time']) ?>"
+        required
+      >
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label>Therapist</label>
+    <select name="staff_id" class="form-control" required>
+      <?php foreach ($therapists as $t): ?>
+        <option
+          value="<?= (int)$t['id'] ?>"
+          <?= $t['id']==$apt['staff_id'] ? 'selected' : '' ?>
+        >
+          <?= htmlspecialchars($t['first_name'].' '.$t['last_name'],ENT_QUOTES) ?>
+        </option>
+      <?php endforeach; ?>
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label>Client</label>
+    <!-- readonly display + hidden client_id -->
     <input
-      type="time"
-      name="end_time"
-      class="form-control"
-      value="<?= htmlspecialchars($apt['end_time']) ?>"
-      required
+      type="text"
+      class="form-control mb-2"
+      value="<?= htmlspecialchars($apt['full_client_name'],ENT_QUOTES) ?>"
+      readonly
+    >
+    <input
+      type="hidden"
+      name="client_id"
+      value="<?= (int)$apt['client_id'] ?>"
     >
   </div>
-</div>
 
-<div class="form-group">
-  <label>Therapist</label>
-  <select name="staff_id" class="form-control" required>
-    <?php foreach ($therapists as $t): ?>
-      <option
-        value="<?= $t['id'] ?>"
-        <?= $t['id']==$apt['staff_id']?'selected':'' ?>
-      >
-        <?= htmlspecialchars($t['first_name'].' '.$t['last_name'],ENT_QUOTES) ?>
-      </option>
-    <?php endforeach; ?>
-  </select>
-</div>
+  <div class="form-group">
+    <label>Service</label>
+    <select name="service_id" class="form-control" required>
+      <?php foreach ($services as $s): ?>
+        <option
+          value="<?= (int)$s['id'] ?>"
+          <?= $s['id']==$apt['service_id'] ? 'selected' : '' ?>
+        >
+          <?= htmlspecialchars($s['name'],ENT_QUOTES) ?>
+        </option>
+      <?php endforeach; ?>
+    </select>
+  </div>
 
-<div class="form-group">
-  <label>Client</label>
-  <select name="client_id" class="form-control">
-    <option value="">— New Walk-in —</option>
-    <?php foreach ($clients as $c): ?>
-      <option
-        value="<?= $c['id'] ?>"
-        <?= $c['id']==$apt['client_id']?'selected':'' ?>
-      >
-        <?= htmlspecialchars($c['first_name'].' '.$c['last_name'],ENT_QUOTES) ?>
-      </option>
-    <?php endforeach; ?>
-  </select>
-</div>
+  <div class="form-group">
+    <label>Notes</label>
+    <textarea name="notes" class="form-control"><?= htmlspecialchars($apt['notes'],ENT_QUOTES) ?></textarea>
+  </div>
 
-<div class="form-group">
-  <label>Service</label>
-  <select name="service_id" class="form-control" required>
-    <?php foreach ($services as $s): ?>
-      <option
-        value="<?= $s['id'] ?>"
-        <?= $s['id']==$apt['service_id']?'selected':'' ?>
-      >
-        <?= htmlspecialchars($s['name'],ENT_QUOTES) ?>
-      </option>
-    <?php endforeach; ?>
-  </select>
-</div>
+  <div class="form-check mb-3">
+    <input
+      type="checkbox"
+      name="send_sms"
+      id="edit_send_sms"
+      class="form-check-input"
+      <?= $apt['send_sms'] ? 'checked' : '' ?>
+    >
+    <label class="form-check-label" for="edit_send_sms">Send SMS</label>
+  </div>
 
-<div class="form-group">
-  <label>Notes</label>
-  <textarea name="notes" class="form-control"><?= htmlspecialchars($apt['notes'],ENT_QUOTES) ?></textarea>
-</div>
-
-<div class="form-check mb-3">
-  <input
-    type="checkbox"
-    name="send_sms"
-    id="edit_send_sms"
-    class="form-check-input"
-    <?= $apt['send_sms'] ? 'checked' : '' ?>
-  >
-  <label class="form-check-label" for="edit_send_sms">Send SMS</label>
-</div>
-
-<div class="modal-footer">
-  <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-  <button
-    type="button"
-    class="btn btn-primary"
-    id="saveAppointmentBtn"
-  >Save changes</button>
-</div>
+  <div class="modal-footer">
+    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+    <button type="button" class="btn btn-primary" id="saveAppointmentBtn">Save changes</button>
+  </div>
+</form>
 
 <script>
-// After injecting the above HTML into your modal body,
-// use this handler to POST updates via AJAX
-
+// 5) Bind only once after injecting the form
 $('#saveAppointmentBtn').on('click', function() {
-  var data = $('#assignForm').serialize();  // reuse your form id or wrap fields
-  $.post('save_appointment.php', data, function(resp) {
+  $.post('update_appointment.php', $('#assignFormEdit').serialize(), function(resp) {
     if (resp.success) {
       $('#assignModal').modal('hide');
       mainCalendar.refetchEvents();
     } else {
-      alert('Error: '+resp.error);
+      alert('Error: ' + resp.error);
     }
   }, 'json');
 });
