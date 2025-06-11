@@ -1,298 +1,96 @@
 <?php
-// pages/appointments.php — Manage Appointments Page
-require_once '../auth.php';
+// pages/appointments.php — Manage Appointments Page with Calendar/Table Toggle
+require_once __DIR__ . '/../auth.php';
 requirePermission($pdo, 'appointment.manage');
-
-
-// ────────────────────────────────────────────────────────────────────────────────
-// (A) AJAX “Add Appointment” Branch
-// If called as ?action=add&ajax=1, return only the <form id="appointmentForm">…</form>, then exit.
-// ────────────────────────────────────────────────────────────────────────────────
-if (
-  isset($_GET['action']) && $_GET['action'] === 'add'
-  && isset($_GET['ajax'])   && $_GET['ajax'] == 1
-) {
-  // Return *only* the form+mini-calendar markup and the JS needed to make it work.
-  ?>
-<style>
-      /* force your calendar element to fill its parent horizontally */
-      #appointmentsMainCalendar {
-        width: 100% !important;
-      }
-</style>
-  <form id="appointmentForm">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title" id="addAppointmentLabel">New Appointment</h5>
-            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-              <span aria-hidden="true">&times;</span>
-            </button>
-          </div>
-          <div class="modal-body">
-            <!-- Client fields -->
-            <div class="form-row">
-              <div class="form-group col-md-6">
-                <label for="existingClient">Existing Client</label>
-                <select id="existingClient" name="client_id" class="w-100">
-                  <option></option>
-                  <?php
-                  $stmt = $pdo->query("
-                    SELECT id, first_name, last_name, mobile
-                      FROM clients
-                     ORDER BY first_name, last_name
-                  ");
-                  while ($c = $stmt->fetch(PDO::FETCH_ASSOC)) {
-                    $label = htmlspecialchars("{$c['first_name']} {$c['last_name']} ({$c['mobile']})");
-                    echo "<option value=\"{$c['id']}\">{$label}</option>";
-                  }
-                  ?>
-                </select>
-              </div>
-              <div class="form-group col-md-6">
-                <label for="newClientName">New Client Name</label>
-                <input type="text" class="form-control" id="newClientName" name="client_name" placeholder="If not on list" />
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group col-md-6">
-                <label for="newClientPhone">New Client Phone</label>
-                <input type="text" class="form-control" id="newClientPhone" name="client_phone" placeholder="Phone" />
-              </div>
-              <div class="form-group col-md-6">
-                <label for="notes">Notes</label>
-                <textarea class="form-control" id="notes" name="notes" rows="2" placeholder="Any notes…"></textarea>
-              </div>
-            </div>
-            <div class="form-group form-check">
-              <input type="checkbox" class="form-check-input" id="sendSmsToggle" name="send_sms" />
-              <label class="form-check-label" for="sendSmsToggle">Send SMS (future feature)</label>
-            </div>
-
-            <hr/>
-
-            <!-- Filter by Service Category -->
-            <div class="mb-2">
-              <strong>Filter by Category:</strong>
-              <?php
-              // Pull each category’s color from service_categories.color
-              $cstmt = $pdo->query("SELECT id, name, color FROM service_categories ORDER BY name");
-              while ($cat = $cstmt->fetch(PDO::FETCH_ASSOC)) {
-                $catName  = htmlspecialchars($cat['name']);
-                $catColor = htmlspecialchars($cat['color']);
-                echo "<button type=\"button\" class=\"btn btn-sm btn-outline-secondary category-filter\" data-category-id=\"{$cat['id']}\">"
-                   . "<span class=\"category-color-box\" style=\"background:{$catColor};\"></span>"
-                   . "{$catName}</button> ";
-              }
-              echo '<button type="button" class="btn btn-sm btn-outline-secondary category-filter" data-category-id="">'
-                 . '<span class="category-color-box" style="background:#6c757d;"></span>All</button>';
-              ?>
-            </div>
-
-            <!-- Draggable Services List -->
-            <div id="serviceList" class="mb-3" style="max-height:150px; overflow-y:auto; border:1px solid #444; padding:10px;">
-              <?php
-              // Join services → service_categories to pull each service’s category color
-              $sstmt = $pdo->query("
-                SELECT s.id, s.name, s.category_id, sc.color AS cat_color
-                  FROM services s
-                  JOIN service_categories sc ON s.category_id = sc.id
-                 ORDER BY s.name
-              ");
-              while ($srv = $sstmt->fetch(PDO::FETCH_ASSOC)) {
-                $srvLabel = htmlspecialchars($srv['name']);
-                $catId    = (int)$srv['category_id'];
-                $bgColor  = htmlspecialchars($srv['cat_color']);
-                echo "<div class=\"fc-event draggable-service\" data-service-id=\"{$srv['id']}\" data-category-id=\"{$catId}\" "
-                   . "style=\"margin-bottom:5px; padding:5px; background:{$bgColor}; color:#fff; cursor:move; border-radius:3px;\">"
-                   . "{$srvLabel}</div>";
-              }
-              ?>
-            </div>
-            <hr/>
-
-            <!-- (4) Go To Date selector above the mini-calendar -->
-            <div class="form-group">
-              <label for="goToDate">Go To Date:</label>
-              <input type="date" id="goToDate" class="form-control" />
-            </div>
-
-            <!-- Mini Calendar for Drag‐Drop -->
-            <div id="appointmentCalendarModal" style="height:350px; border:1px solid #444;"></div>
-            <input type="hidden" id="hiddenServiceId" name="service_id" />
-            <input type="hidden" id="hiddenStartTime" name="start_iso" />
-            <input type="hidden" id="hiddenEndTime" name="end_iso" />
-            <input type="hidden" id="hiddenStaffId" name="staff_id" />
-          </div>
-          <div class="modal-footer">
-            <button type="submit" class="btn btn-primary">Add Appointment</button>
-            <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-          </div>
-        </div>
-      </form>
-  <?php
-  exit();
-}
-// ────────────────────────────────────────────────────────────────────────────────
-// (End AJAX “add” branch) — everything below renders the full “Manage Appointments” page.
-// ────────────────────────────────────────────────────────────────────────────────
-
 $page_title = 'Manage Appointments';
 ?>
 <?php include '../includes/header.php'; ?>
 <?php include '../includes/sidebar.php'; ?>
 
-<!-- (1) After AdminLTE’s CSS, pull in Select2 v4.0.13 CSS -->
-<link
-  href="https://cdn.jsdelivr.net/npm/select2@4.0.13/dist/css/select2.min.css"
-  rel="stylesheet"
-/>
-
-<!-- (2) Dark‐mode overrides for Select2 (to match AdminLTE dark theme) -->
+<!-- CSS: FullCalendar Scheduler, DataTables, Select2 -->
+<link href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css" rel="stylesheet"/>
+<link href="https://cdn.jsdelivr.net/npm/select2@4.0.13/dist/css/select2.min.css" rel="stylesheet"/>
 <style>
-
+  .blinking-event { animation: blink 1s infinite alternate; }
+  @keyframes blink { from{opacity:1;} to{opacity:0.3;} }
+  #appointmentsMainCalendar { border:1px solid #444; height:600px; width:100% !important; }
+  #tableSection { display:none; }
 </style>
 
-<!-- (3) FullCalendar Scheduler CSS (v6), relative to this page -->
-<!-- <link href="assets/fullcalendar-scheduler/main.min.css" rel="stylesheet"/>
-<link href="assets/fullcalendar-scheduler/resource-timegrid.min.css" rel="stylesheet"/> -->
-
 <div class="content-wrapper">
-  <!-- Page Header -->
+  <!-- View Toggle + Add Appointment Button -->
   <section class="content-header">
     <div class="container-fluid">
       <div class="row mb-2">
         <div class="col-sm-6">
-          <h1>Appointments</h1>
+          <div class="btn-group" role="group" aria-label="View toggle">
+            <button id="btnViewCalendar" class="btn btn-outline-primary active">Calendar View</button>
+            <button id="btnViewTable"    class="btn btn-outline-primary">Table View</button>
+          </div>
         </div>
         <div class="col-sm-6 text-right">
-          <button
-            class="btn btn-primary"
-            data-toggle="modal"
-            data-target="#addAppointmentModal"
-          >
-            <i class="fas fa-plus"></i> Add Appointment
-          </button>
+          <button id="btnAddAppt" class="btn btn-primary"><i class="fas fa-plus"></i> Add Appointment</button>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- Main Content: Appointment Calendar -->
   <section class="content">
     <div class="container-fluid">
-      <div id="appointmentsMainCalendar" style="height:600px; border:1px solid #444;"></div>
+      <!-- Calendar Section -->
+      <div id="calendarSection">
+        <div id="appointmentsMainCalendar"></div>
+      </div>
+
+      <!-- Table Section -->
+      <div id="tableSection">
+        <div class="row mb-2">
+          <div class="col-md-3">
+            <select id="lengthMenu" class="form-control">
+              <option value="10">10 entries</option>
+              <option value="20">20 entries</option>
+              <option value="50">50 entries</option>
+              <option value="100">100 entries</option>
+              <option value="200">200 entries</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <select id="filterTodayAll" class="form-control">
+              <option value="today">Today's appointments</option>
+              <option value="all">All appointments</option>
+            </select>
+          </div>
+          <div class="col-md-6 text-right">
+            <input type="text" id="tableSearch" class="form-control" placeholder="Search by client name...">
+          </div>
+        </div>
+        <table id="appointmentsListTable" class="table table-bordered table-hover">
+          <thead>
+            <tr>
+              <th>Date</th><th>Time</th><th>Client</th><th>Staff</th><th>Service</th><th>Notes</th><th>Action</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </div>
   </section>
 </div>
 
-<!-- Add Appointment Modal (removed aria-hidden attribute entirely) -->
-<div class="modal fade" id="addAppointmentModal" tabindex="-1" role="dialog" aria-labelledby="addAppointmentLabel">
-  <div class="modal-dialog modal-lg" role="document">
+<!-- Add Appointment Modal -->
+<div class="modal fade" id="addAppointmentModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
     <form id="appointmentForm">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title" id="addAppointmentLabel">New Appointment</h5>
-          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-            <span aria-hidden="true">&times;</span>
-          </button>
+          <h5 class="modal-title">New Appointment</h5>
+          <button type="button" class="close" data-dismiss="modal">&times;</button>
         </div>
-        <div class="modal-body">
-          <!-- Client fields -->
-          <div class="form-row">
-            <div class="form-group col-md-6">
-              <label for="existingClient">Existing Client</label>
-              <select id="existingClient" name="client_id" class="w-100">
-                <option></option>
-                <?php
-                $stmt = $pdo->query("
-                  SELECT id, first_name, last_name, mobile
-                    FROM clients
-                   ORDER BY first_name, last_name
-                ");
-                while ($c = $stmt->fetch(PDO::FETCH_ASSOC)) {
-                  $label = htmlspecialchars("{$c['first_name']} {$c['last_name']} ({$c['mobile']})");
-                  echo "<option value=\"{$c['id']}\">{$label}</option>";
-                }
-                ?>
-              </select>
-            </div>
-            <div class="form-group col-md-6">
-              <label for="newClientName">New Client Name</label>
-              <input type="text" class="form-control" id="newClientName" name="client_name" placeholder="If not on list" />
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group col-md-6">
-              <label for="newClientPhone">New Client Phone</label>
-              <input type="text" class="form-control" id="newClientPhone" name="client_phone" placeholder="Phone" />
-            </div>
-            <div class="form-group col-md-6">
-              <label for="notes">Notes</label>
-              <textarea class="form-control" id="notes" name="notes" rows="2" placeholder="Any notes…"></textarea>
-            </div>
-          </div>
-          <div class="form-group form-check">
-            <input type="checkbox" class="form-check-input" id="sendSmsToggle" name="send_sms" />
-            <label class="form-check-label" for="sendSmsToggle">Send SMS (future feature)</label>
-          </div>
-
-          <hr/>
-
-          <!-- Filter by Service Category -->
-          <div class="mb-2">
-            <strong>Filter by Category:</strong>
-            <?php
-            // Pull each category’s color from service_categories.color
-            $cstmt = $pdo->query("SELECT id, name, color FROM service_categories ORDER BY name");
-            while ($cat = $cstmt->fetch(PDO::FETCH_ASSOC)) {
-              $catName  = htmlspecialchars($cat['name']);
-              $catColor = htmlspecialchars($cat['color']);
-              echo "<button type=\"button\" class=\"btn btn-sm btn-outline-secondary category-filter\" data-category-id=\"{$cat['id']}\">"
-                 . "<span class=\"category-color-box\" style=\"background:{$catColor};\"></span>"
-                 . "{$catName}</button> ";
-            }
-            echo '<button type="button" class="btn btn-sm btn-outline-secondary category-filter" data-category-id="">'
-               . '<span class="category-color-box" style="background:#6c757d;"></span>All</button>';
-            ?>
-          </div>
-
-          <!-- Draggable Services List -->
-          <div id="serviceList" class="mb-3" style="max-height:150px; overflow-y:auto; border:1px solid #444; padding:10px;">
-            <?php
-            // Join services → service_categories to pull each service’s category color
-            $sstmt = $pdo->query("
-              SELECT s.id, s.name, s.category_id, sc.color AS cat_color
-                FROM services s
-                JOIN service_categories sc ON s.category_id = sc.id
-               ORDER BY s.name
-            ");
-            while ($srv = $sstmt->fetch(PDO::FETCH_ASSOC)) {
-              $srvLabel = htmlspecialchars($srv['name']);
-              $catId    = (int)$srv['category_id'];
-              $bgColor  = htmlspecialchars($srv['cat_color']);
-              echo "<div class=\"fc-event draggable-service\" data-service-id=\"{$srv['id']}\" data-category-id=\"{$catId}\" "
-                 . "style=\"margin-bottom:5px; padding:5px; background:{$bgColor}; color:#fff; cursor:move; border-radius:3px;\">"
-                 . "{$srvLabel}</div>";
-            }
-            ?>
-          </div>
-          <hr/>
-
-          <!-- (4) Go To Date selector above the mini-calendar -->
-          <div class="form-group">
-            <label for="goToDate">Go To Date:</label>
-            <input type="date" id="goToDate" class="form-control" />
-          </div>
-
-          <!-- Mini Calendar for Drag‐Drop -->
-          <div id="appointmentCalendarModal" style="height:350px; border:1px solid #444;"></div>
-          <input type="hidden" id="hiddenServiceId" name="service_id" />
-          <input type="hidden" id="hiddenStartTime" name="start_iso" />
-          <input type="hidden" id="hiddenEndTime" name="end_iso" />
-          <input type="hidden" id="hiddenStaffId" name="staff_id" />
+        <div class="modal-body" id="addApptFormContainer">
+          <div class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading…</div>
         </div>
         <div class="modal-footer">
-          <button type="submit" class="btn btn-primary">Add Appointment</button>
+          <button type="submit" class="btn btn-primary">Save Appointment</button>
           <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
         </div>
       </div>
@@ -300,22 +98,19 @@ $page_title = 'Manage Appointments';
   </div>
 </div>
 
-<!-- Confirm Change Modal -->
-<div class="modal fade" id="confirmChangeModal" tabindex="-1" role="dialog" aria-labelledby="confirmChangeLabel" aria-hidden="true">
-  <div class="modal-dialog" role="document">
+<!-- Edit Appointment Modal -->
+<div class="modal fade" id="editAppointmentModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title" id="confirmChangeLabel">Confirm Appointment Time Change</h5>
-        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-          <span aria-hidden="true">&times;</span>
-        </button>
+        <h5 class="modal-title">Edit Appointment</h5>
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
       </div>
-      <div class="modal-body">
-        <p id="change-text">Are you sure you want to move this appointment?</p>
+      <div class="modal-body" id="editAppointmentBody">
+        <div class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading…</div>
       </div>
       <div class="modal-footer">
-        <button type="button" id="confirm-change-btn" class="btn btn-primary">Yes, Save</button>
-        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+        <!-- Edit Appointment form should include its own Save button within appointments_edit.php -->
       </div>
     </div>
   </div>
@@ -323,265 +118,34 @@ $page_title = 'Manage Appointments';
 
 <?php include '../includes/footer.php'; ?>
 
-<!-- (5) jQuery -->
+<!-- JS: jQuery, Bootstrap, FullCalendar, DataTables, Select2, Moment -->
 <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
-<!-- (6) Bootstrap JS bundle (Popper + Bootstrap) -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
-<!-- (7) FullCalendar Scheduler UMD (relative to this page) -->
 <script src="assets/fullcalendar-scheduler/index.global.min.js"></script>
-<!-- (8) Select2 JS (v4.0.13) -->
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.0.13/dist/js/select2.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
 
 <script>
-$(document).ready(function() {
-  // ─── (A) Clear stray modal/backdrop on page load ───
-  $('#addAppointmentModal').modal('hide');
-  $('.modal-backdrop').remove();
-
-  // ─── (B) Initialize Select2 on “Existing Client” ───
-  if (typeof $.fn.select2 !== 'function') {
-    console.error('Select2 did NOT load!');
-    return;
-  }
-  $('#existingClient').select2({
-    placeholder: 'Type to search clients…',
-    allowClear: true,
-    width: '100%',
-    dropdownParent: $('#addAppointmentModal')
+$(function(){
+  // ─── 1) VIEW TOGGLE ─────────────────────────────────────────────
+  $('#btnViewCalendar').click(function(){
+    $('#btnViewCalendar').addClass('active');
+    $('#btnViewTable').removeClass('active');
+    $('#tableSection').hide();
+    $('#calendarSection').show();
+  });
+  $('#btnViewTable').click(function(){
+    $('#btnViewTable').addClass('active');
+    $('#btnViewCalendar').removeClass('active');
+    $('#calendarSection').hide();
+    $('#tableSection').show();
+    loadTable();
   });
 
-  // ─── (C) Verify FullCalendar UMD loaded ───
-  if (
-    typeof FullCalendar === 'undefined' ||
-    typeof FullCalendar.Calendar !== 'function' ||
-    typeof FullCalendar.Draggable !== 'function' ||
-    !Array.isArray(FullCalendar.globalPlugins)
-  ) {
-    console.error('FullCalendar Scheduler UMD did not load.');
-    return;
-  }
-  const plugins = FullCalendar.globalPlugins;
-
-  // ─── (D) Mini‐calendar inside the “Add Appointment” modal ───
-  $('#addAppointmentModal').on('shown.bs.modal', function () {
-    // (D1) Bind Draggable only once per element
-    $('#serviceList .draggable-service').each(function() {
-      if (!$(this).data('draggableBound')) {
-        const serviceId = $(this).data('service-id');
-        const eventObj  = {
-          title: $(this).text().trim(),
-          extendedProps: { service_id: serviceId }
-        };
-        $(this).data('event', eventObj);
-
-        new FullCalendar.Draggable(this, {
-          itemSelector: '.draggable-service',
-          eventData: () => $(this).data('event')
-        });
-        $(this).data('draggableBound', true);
-      }
-    });
-
-    // (D2) Build the mini-calendar with AM/PM labels
-    const modalEl = document.getElementById('appointmentCalendarModal');
-    const modalCalendar = new FullCalendar.Calendar(modalEl, {
-      schedulerLicenseKey: 'GPL-My-Project-Is-Open-Source',
-      plugins: plugins,
-      locale: 'en-gb',
-      timeZone: 'local',
-        views: {
-          resourceTimeGridDay: {
-            type: 'resourceTimeGrid',
-            buttonText: '1 day'
-          },
-          resourceTimeGridThreeDay: {
-            type: 'resourceTimeGrid',
-            duration: { days: 3 },
-            buttonText: '3 days'
-          },
-          resourceTimeGridFiveDay: {
-            type: 'resourceTimeGrid',
-            duration: { days: 5 },
-            buttonText: '5 days'
-          }
-        },
-      initialView: 'resourceTimeGridDay',
-      slotMinTime: '06:00:00',
-      slotMaxTime: '22:00:00',
-      slotDuration: '00:05:00',
-      slotLabelInterval: '00:15:00',
-      allDaySlot: false,
-      headerToolbar: {
-        left: 'prev,next today',
-        center: 'title',
-        right: 'resourceTimeGridDay,resourceTimeGridThreeDay,resourceTimeGridFiveDay'
-      },
-      nowIndicator: true,
-      slotLabelFormat: { hour: 'numeric', minute: '2-digit', hour12: true },
-      titleFormat:   { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' },
-      resources: <?php
-        $tstmt = $pdo->prepare("
-          SELECT id, first_name, last_name, color, position
-            FROM therapists
-           WHERE show_in_calendar = 1
-           ORDER BY position ASC, first_name ASC
-        ");
-        $tstmt->execute();
-        $therapists = $tstmt->fetchAll(PDO::FETCH_ASSOC);
-        $jsRes = [];
-        foreach ($therapists as $t) {
-          $jsRes[] = [
-            'id'         => $t['id'],
-            'title'      => "{$t['first_name']} {$t['last_name']}",
-            'eventColor' => $t['color']
-          ];
-        }
-        echo json_encode($jsRes);
-      ?>,
-      editable: true,
-      droppable: true,
-      eventResizableFromStart: true,
-      eventDurationEditable: true,
-
-      // (D3) If a second service is dropped, remove the existing one
-      eventReceive: function(info) {
-        const allEv = modalCalendar.getEvents();
-        if (allEv.length > 1) {
-          // Remove the first (older) event, keep only newest
-          allEv[0].remove();
-        }
-      },
-
-      // (D4) Clicking on any event removes it immediately
-      eventClick: function(info) {
-        info.event.remove();
-      },
-
-      events: []
-    });
-    modalCalendar.render();
-    $('#addAppointmentModal').data('calendarInstance', modalCalendar);
-
-    // (D5) “Go To Date” input – change date to that day
-    $('#goToDate').off('change').on('change', function() {
-      const val = $(this).val();
-      if (val) {
-        modalCalendar.gotoDate(val);
-      }
-    });
-    // Initialize the GoToDate input to today’s date
-    const today = new Date();
-    const yyyy = today.getFullYear();
-    const MM   = String(today.getMonth()+1).padStart(2,'0');
-    const dd   = String(today.getDate()).padStart(2,'0');
-    $('#goToDate').val(`${yyyy}-${MM}-${dd}`);
-    modalCalendar.gotoDate(`${yyyy}-${MM}-${dd}`);
-  });
-
-  $('#addAppointmentModal').on('hide.bs.modal', function () {
-    $('.modal-backdrop').remove();
-    const cal = $(this).data('calendarInstance');
-    if (cal) {
-      cal.destroy();
-      $(this).removeData('calendarInstance');
-    }
-    $('#appointmentForm')[0].reset();
-    $('#serviceList .draggable-service').removeData('event');
-    // We do NOT remove data-draggableBound, so Draggable remains bound exactly once
-  });
-
-  // ─── (E) Filter Services by Category ───
-  $('.category-filter').on('click', function() {
-    const catId = $(this).data('category-id');
-    $('#serviceList .draggable-service').each(function() {
-      const svcCat = $(this).data('category-id');
-      if (!catId || svcCat == catId) {
-        $(this).show();
-      } else {
-        $(this).hide();
-      }
-    });
-  });
-
-  // ─── (F) Submit “Add Appointment” Form ───
-  $('#appointmentForm').on('submit', function(e) {
-    e.preventDefault();
-
-    const modalCal = $('#addAppointmentModal').data('calendarInstance');
-    if (!modalCal) {
-      return alert('Calendar not instantiated—please reopen the modal.');
-    }
-
-    const evList = modalCal.getEvents();
-    if (evList.length === 0 || !evList[0].start) {
-      return alert('Please drag a service onto the mini-calendar to pick a valid time.');
-    }
-
-    // Always take the last‐dropped event
-    const ev = evList[evList.length - 1];
-
-    // Build local “YYYY-MM-DD HH:mm:00” strings
-    function formatLocal(dt) {
-      const yyyy = dt.getFullYear();
-      const MM   = String(dt.getMonth()+1).padStart(2,'0');
-      const dd   = String(dt.getDate()).padStart(2,'0');
-      const hh   = String(dt.getHours()).padStart(2,'0');
-      const mm   = String(dt.getMinutes()).padStart(2,'0');
-      return `${yyyy}-${MM}-${dd} ${hh}:${mm}:00`;
-    }
-
-    const startLocal = formatLocal(ev.start);
-    const endDateObj = ev.end || new Date(ev.start.getTime() + 30*60*1000);
-    const endLocal   = formatLocal(endDateObj);
-
-    const resources = ev.getResources();
-    if (!resources || resources.length === 0) {
-      return alert('Could not find the assigned staff—please drop onto a staff row.');
-    }
-    const staffId = resources[0].id;
-
-    // Determine client (existing or new)
-    const existingClientId = $('#existingClient').val();
-    const newClientName    = $('#newClientName').val().trim();
-    const newClientPhone   = $('#newClientPhone').val().trim();
-    let clientId   = null;
-    let clientName = null;
-    let clientPhone= null;
-    if (existingClientId) {
-      clientId = existingClientId;
-    } else if (newClientName && newClientPhone) {
-      clientName  = newClientName;
-      clientPhone = newClientPhone;
-    } else {
-      return alert('Please select an existing client or enter a new client’s name & phone.');
-    }
-
-    const notes   = $('#notes').val().trim();
-    const sendSms = $('#sendSmsToggle').is(':checked') ? 1 : 0;
-
-    $.post('/pages/save_appointment.php', {
-      service_id:   ev.extendedProps.service_id,
-      start_iso:    startLocal,
-      end_iso:      endLocal,
-      staff_id:     staffId,
-      client_id:    clientId,
-      client_name:  clientName,
-      client_phone: clientPhone,
-      notes:        notes,
-      send_sms:     sendSms
-    }, function(resp) {
-      if (resp.success) {
-        $('#addAppointmentModal').modal('hide');
-        mainCalendar.refetchEvents();
-      } else {
-        alert('Error saving appointment: ' + resp.error);
-      }
-    }, 'json');
-  });
-
-  // ─── (G) Main Calendar Setup ───
+  // ─── 2) MAIN CALENDAR INIT ─────────────────────────────────────
   let mainCalendar;
-  fetch('./calendar_resources.php')
+  fetch('calendar_resources.php')
     .then(r => r.json())
     .then(resources => {
       const el = document.getElementById('appointmentsMainCalendar');
@@ -590,148 +154,182 @@ $(document).ready(function() {
         plugins: FullCalendar.globalPlugins,
         timeZone: 'local',
         initialView: 'resourceTimeGridDay',
-        views: {
-          resourceTimeGridDay: {
-            type: 'resourceTimeGrid',
-            buttonText: '1 day'
-          },
-          resourceTimeGridThreeDay: {
-            type: 'resourceTimeGrid',
-            duration: { days: 3 },
-            buttonText: '3 days'
-          },
-          resourceTimeGridFiveDay: {
-            type: 'resourceTimeGrid',
-            duration: { days: 5 },
-            buttonText: '5 days'
-          }
-        },
-        slotMinTime: '06:00:00',
-        slotMaxTime: '22:00:00',
-        slotDuration: '00:05:00',
-        slotLabelInterval: '00:15:00',
-        allDaySlot: false,
         headerToolbar: {
           left: 'prev,next today',
           center: 'title',
           right: 'resourceTimeGridDay,resourceTimeGridThreeDay,resourceTimeGridFiveDay'
         },
-        nowIndicator: true,
-        slotLabelFormat: { hour: 'numeric', minute: '2-digit', hour12: true },
-        titleFormat:     { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' },
-        resources: resources,
-        events: '/pages/appointment_events.php',
+        views: {
+          resourceTimeGridDay: { buttonText: '1 day' },
+          resourceTimeGridThreeDay: { type: 'resourceTimeGrid', duration: { days: 3 }, buttonText: '3 days' },
+          resourceTimeGridFiveDay: { type: 'resourceTimeGrid', duration: { days: 5 }, buttonText: '5 days' }
+        },
+        resources,
+        events: 'appointment_events.php',
         editable: true,
-        eventResizableFromStart: true,
-        eventDurationEditable: true,
         selectable: true,
-
-        // ─── (G3) Add datesSet callback to override multi-day titles ───
-        eventClassNames: function(arg) {
-          // arg.event.start and arg.event.end are JavaScript Date objects
-          const now = new Date();
-          const evStart = arg.event.start;
-          const evEnd   = arg.event.end || new Date(evStart.getTime() + 30*60*1000);
-
-          // If “now” is between start (inclusive) and end (exclusive), flash it
-          if (now >= evStart && now < evEnd) {
-            return ['blinking-event'];
-          }
-          return [];
+        nowIndicator: true,
+        eventClassNames: arg => {
+          const now = new Date(), s = arg.event.start, e = arg.event.end || new Date(s.getTime()+1800000);
+          return (now >= s && now < e) ? ['blinking-event'] : [];
         }
-       ,datesSet: function(arg) {
-          // Only override the title on 3-day or 5-day views:
-          let vt = arg.view.type;
-          if (vt === 'resourceTimeGridThreeDay' || vt === 'resourceTimeGridFiveDay') {
-            // Compute visible start and end
-            let start = arg.view.currentStart;
-            let end = new Date(arg.view.currentEnd.getTime() - 1);
-
-            // Format “Thursday – 5”
-            let startText = new Intl.DateTimeFormat('en-US', {
-              weekday: 'long',
-              day: 'numeric'
-            }).format(start);
-
-            // Format “Saturday – 7 June, 2025”
-            let endText = new Intl.DateTimeFormat('en-US', {
-              weekday: 'long',
-              day: 'numeric',
-              month: 'long',
-              year: 'numeric'
-            }).format(end);
-
-            let titleEl = document.querySelector('.fc-toolbar-title');
-            if (titleEl) {
-              titleEl.innerText = startText + ' — ' + endText;
-            }
-          }
-          // For the 1-day view, let FullCalendar’s default titleFormat apply.
-        },
-
-        // (G1) When an appointment is dragged to a new time/row
-        eventDrop: function(info) {
-          const ev    = info.event;
-          const id    = ev.id;
-          const start = ev.start;
-          const end   = ev.end || new Date(ev.start.getTime() + 30*60*1000);
-          function formatLocal(dt) {
-            const yyyy = dt.getFullYear();
-            const MM   = String(dt.getMonth()+1).padStart(2,'0');
-            const dd   = String(dt.getDate()).padStart(2,'0');
-            const hh   = String(dt.getHours()).padStart(2,'0');
-            const mm   = String(dt.getMinutes()).padStart(2,'0');
-            return `${yyyy}-${MM}-${dd} ${hh}:${mm}:00`;
-          }
-          $.post('/pages/update_appointment_time.php', {
-            id:         id,
-            start_time: formatLocal(start),
-            end_time:   formatLocal(end)
-          }, function(resp) {
-            if (!resp.success) {
-              alert('Could not update appointment: ' + resp.error);
-              info.revert();
-            }
-          }, 'json');
-        },
-
-        // (G2) When an appointment is resized
-        eventResize: function(info) {
-          const ev    = info.event;
-          const id    = ev.id;
-          const start = ev.start;
-          const end   = ev.end;
-          function formatLocal(dt) {
-            const yyyy = dt.getFullYear();
-            const MM   = String(dt.getMonth()+1).padStart(2,'0');
-            const dd   = String(dt.getDate()).padStart(2,'0');
-            const hh   = String(dt.getHours()).padStart(2,'0');
-            const mm   = String(dt.getMinutes()).padStart(2,'0');
-            return `${yyyy}-${MM}-${dd} ${hh}:${mm}:00`;
-          }
-          $.post('/pages/update_appointment.php', {
-            id:         id,
-            start_time: formatLocal(start),
-            end_time:   formatLocal(end)
-          }, function(resp) {
-            if (!resp.success) {
-              alert('Could not update appointment: ' + resp.error);
-              info.revert();
-            }
-          }, 'json');
-        },
-
-        eventClick: function(info) { /* future if needed */ }
       });
       mainCalendar.render();
+    });
 
-      $(document).on('collapsed.lte.pushmenu expanded.lte.pushmenu', function() {
-      setTimeout(() => mainCalendar.updateSize(), 300);
+  // ─── 3) ADD APPOINTMENT ──────────────────────────────────────────
+  $('#btnAddAppt').click(() => {
+    const $modal = $('#addAppointmentModal');
+    const $container = $modal.find('#addApptFormContainer')
+      .html('<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading…</div>');
+    $modal.modal('show');
+
+    $.get('add_appointment.php', formHtml => {
+      $container.html(formHtml);
+
+      // a) Select2
+      $container.find('#existingClient, #staffSelect, #serviceSelect').select2({
+        width: '100%', dropdownParent: $modal
       });
 
-     $('.main-sidebar').on('transitionend', () => {
-     mainCalendar.updateSize();
-     });
+      // b) Category filter
+      $modal.off('click', '.category-filter')
+            .on('click', '.category-filter', function(){
+        const cat = $(this).data('category-id');
+        $container.find('#serviceList .draggable-service').each(function(){
+          $(this).toggle(!cat || $(this).data('category-id') == cat);
+        });
+      });
+
+      // c) Draggable services
+      if (FullCalendar.Draggable) {
+        $container.find('#serviceList .draggable-service').each(function(){
+          const $svc = $(this);
+          if (!$svc.data('draggableBound')) {
+            const eventObj = { title: $svc.text().trim(), extendedProps: { service_id: $svc.data('service-id') } };
+            $svc.data('event', eventObj);
+            new FullCalendar.Draggable(this, {
+              itemSelector: '.draggable-service',
+              eventData: () => $svc.data('event')
+            });
+            $svc.data('draggableBound', true);
+          }
+        });
+      }
+
+      // d) Mini-calendar
+      const modalEl = document.getElementById('appointmentCalendarModal');
+      fetch('calendar_resources.php')
+        .then(r => r.json())
+        .then(resources => {
+          const cal = new FullCalendar.Calendar(modalEl, {
+            schedulerLicenseKey: 'GPL-My-Project-Is-Open-Source',
+            plugins: FullCalendar.globalPlugins,
+            initialView: 'resourceTimeGridDay',
+            headerToolbar: {
+              left: 'prev,next today',
+              center: 'title',
+              right: 'resourceTimeGridDay,resourceTimeGridThreeDay,resourceTimeGridFiveDay'
+            },
+            views: {
+              resourceTimeGridDay: { buttonText: '1 day' },
+              resourceTimeGridThreeDay: { type: 'resourceTimeGrid', duration: { days: 3 }, buttonText: '3 days' },
+              resourceTimeGridFiveDay: { type: 'resourceTimeGrid', duration: { days: 5 }, buttonText: '5 days' }
+            },
+            slotMinTime: '06:00:00', slotMaxTime: '22:00:00',
+            resources, editable: true, droppable: true, nowIndicator: true,
+            eventReceive(info) { const evs = cal.getEvents(); if (evs.length>1) evs[0].remove(); },
+            eventClick(info) { info.event.remove(); }
+          });
+          cal.render();
+          $modal.data('calendarInstance', cal);
+
+          // Go To Date
+          const iso = new Date().toISOString().slice(0,10);
+          $modal.find('#goToDate')
+            .val(iso)
+            .off('change')
+            .on('change', function(){ cal.gotoDate(this.value); });
+        });
+
+      // e) Form submit
+      $modal.off('submit','#appointmentForm')
+            .on('submit','#appointmentForm', function(e){
+        e.preventDefault();
+        const cal = $modal.data('calendarInstance');
+        const evs = cal.getEvents();
+        if (!evs.length||!evs[0].start) return alert('Drag a service onto the calendar to pick a time.');
+        const ev = evs[evs.length-1];
+        const fmt = dt=> dt.toISOString().slice(0,19).replace('T',' ');
+        const data = {
+          service_id: ev.extendedProps.service_id,
+          start_iso: fmt(ev.start),
+          end_iso:   fmt(ev.end||new Date(ev.start.getTime()+1800000)),
+          staff_id: ev.getResources()[0].id,
+          notes: $modal.find('#notes').val().trim(),
+          send_sms: $modal.find('#sendSmsToggle').is(':checked')?1:0
+        };
+        const existing = $modal.find('#existingClient').val();
+        const nName    = $modal.find('#newClientName').val().trim();
+        const nPhone   = $modal.find('#newClientPhone').val().trim();
+        if (existing) data.client_id = existing;
+        else if (nName&&nPhone) { data.client_name=nName; data.client_phone=nPhone; }
+        else return alert('Select an existing client or enter new name & phone.');
+
+        $.post('save_appointment.php',data,resp=>{
+          if(resp.success){ $modal.modal('hide'); mainCalendar.refetchEvents(); }
+          else alert('Error saving appointment: '+resp.error);
+        },'json');
+      });
     });
+  });
+
+  // ─── 4) CLEANUP ON HIDE ─────────────────────────────────────────
+  $('#addAppointmentModal').on('hide.bs.modal', function(){
+    const cal=$(this).data('calendarInstance'); if(cal) cal.destroy();
+    $(this).removeData('calendarInstance');
+    $('#appointmentForm')[0].reset();
+    $('#serviceList .draggable-service').removeData('event');
+    $('.modal-backdrop').remove();
+  });
+
+  // ─── 5) EDIT APPOINTMENT ───────────────────────────────────────
+  $(document).on('click','.edit-apt-btn',function(){
+    const id=$(this).data('id');
+    $('#editAppointmentBody').html('<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading…</div>');
+    $('#editAppointmentModal').modal('show');
+    $.get('appointments_edit.php',{id},html=>{
+      $('#editAppointmentBody').html(html);
+      $('#editAppointmentForm').on('submit',function(e){
+        e.preventDefault();
+        $.post('update_appointment.php',$(this).serialize(),resp=>{
+          if(resp.success){$('#editAppointmentModal').modal('hide');mainCalendar.refetchEvents();}
+          else alert('Error:'+resp.error);
+        },'json');
+      });
+    });
+  });
+
+  // ─── 6) TABLE VIEW ─────────────────────────────────────────────
+  let table;
+  function loadTable(){
+    if($.fn.DataTable.isDataTable('#appointmentsListTable')){table.ajax.reload();return;}
+    table=$('#appointmentsListTable').DataTable({
+      ajax:{url:'appointments_list.php',data:d=>{d.flag=$('#filterTodayAll').val();}},
+      pageLength:parseInt($('#lengthMenu').val(),10),lengthChange:false,searching:false,
+      columns:[
+        {data:'appointment_date'},{data:'time'},{data:'client_name'},{data:'staff_name'},{data:'service_name'},{data:'notes'},
+        {data:null,render:d=>`<button class="btn btn-sm btn-info edit-apt-btn" data-id="${d.id}">Edit</button>
+         <button class="btn btn-sm btn-danger delete-apt-btn" data-id="${d.id}">Delete</button>`}
+      ]
+    });
+    $('#lengthMenu').change(()=>table.page.len(parseInt($('#lengthMenu').val(),10)).draw());
+    $('#filterTodayAll').change(loadTable);
+    $('#tableSearch').on('keyup',()=>table.column(2).search($('#tableSearch').val()).draw());
+    $('#appointmentsListTable').on('click','.delete-apt-btn',function(){
+      const id=$(this).data('id');if(!confirm('Delete this appointment?'))return;
+      $.post('delete_appointment.php',{id},r=>{ if(r.success)table.ajax.reload(); else alert('Error:'+r.error); },'json');
+    });
+  }
 });
 </script>

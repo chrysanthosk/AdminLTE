@@ -3,6 +3,8 @@
 require_once __DIR__ . '/../auth.php';
 requirePermission($pdo, 'appointment.manage');
 
+header('Content-Type: application/json');
+
 $id = (int)($_POST['id'] ?? 0);
 if (!$id) {
   http_response_code(400);
