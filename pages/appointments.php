@@ -29,7 +29,13 @@ $page_title = 'Manage Appointments';
           </div>
         </div>
         <div class="col-sm-6 text-right">
-          <button id="btnAddAppt" class="btn btn-primary"><i class="fas fa-plus"></i> Add Appointment</button>
+          <!-- EXPORT CSV BUTTON -->
+          <button id="btnExportAppt" class="btn btn-secondary mr-2">
+            <i class="fas fa-file-csv"></i> Export CSV
+          </button>
+          <button id="btnAddAppt" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Add Appointment
+          </button>
         </div>
       </div>
     </div>
@@ -380,37 +386,73 @@ $(function(){
     });
   });
 
-  // ─── 6) TABLE VIEW ─────────────────────────────────────────────
+     // ─── 6) TABLE VIEW ─────────────────────────────────────────────
   let table;
-  function loadTable(){
-    if ($.fn.DataTable.isDataTable('#appointmentsListTable')){
-      return table.ajax.reload();
+  function loadTable() {
+    // If already initialized, just reload its data
+    if ($.fn.DataTable.isDataTable('#appointmentsListTable')) {
+      table.ajax.reload();
+      return;
     }
+
     table = $('#appointmentsListTable').DataTable({
-      ajax:{
-        url:'appointments_list.php',
-        data: d => { d.flag = $('#filterTodayAll').val(); }
+      ajax: {
+        url:  'appointments_list.php',
+        data: function(d) { d.flag = $('#filterTodayAll').val(); }
       },
-      pageLength: parseInt($('#lengthMenu').val(),10),
-      lengthChange:false,
-      searching:false,
-      columns:[
-        {data:'appointment_date'},{data:'time'},{data:'client_name'},{data:'staff_name'},{data:'service_name'},{data:'notes'},
-        {data:null,render:d=>`<button class="btn btn-sm btn-info edit-apt-btn" data-id="${d.id}">Edit</button>
-         <button class="btn btn-sm btn-danger delete-apt-btn" data-id="${d.id}">Delete</button>`}
+      pageLength:   parseInt($('#lengthMenu').val(), 10),
+      lengthChange: false,
+      searching:    true,
+      columns: [
+        { data: 'appointment_date' },
+        { data: 'time'             },
+        { data: 'client_name'      },
+        { data: 'staff_name'       },
+        { data: 'service_name'     },
+        { data: 'notes'            },
+        {
+          data:      null,
+          orderable: false,
+          render: function(row) {
+            return  '<button class="btn btn-sm btn-info edit-apt-btn" data-id="'
+                   + row.id + '">Edit</button> '
+                   + '<button class="btn btn-sm btn-danger delete-apt-btn" data-id="'
+                   + row.id + '">Delete</button>';
+          }
+        }
       ]
     });
-    $('#lengthMenu').change(()=>table.page.len(parseInt($('#lengthMenu').val(),10)).draw());
-    $('#filterTodayAll').change(loadTable);
-    $('#tableSearch').on('keyup',()=>table.column(2).search($('#tableSearch').val()).draw());
-    $('#appointmentsListTable').on('click','.delete-apt-btn',function(){
-      const id=$(this).data('id');
-      if (!confirm('Delete this appointment?')) return;
-      $.post('delete_appointment.php',{id},function(r){
-        if (r.success) table.ajax.reload();
-        else alert('Error:'+r.error);
-      },'json');
+
+    // Change page-length dropdown
+    $('#lengthMenu').off('change').on('change', function(){
+      table.page.len(parseInt(this.value, 10)).draw();
     });
-  }
-});
+
+    // Toggle Today/All
+    $('#filterTodayAll').off('change').on('change', loadTable);
+
+    // Wire up custom search input
+    $('#tableSearch').off('keyup').on('keyup', function(){
+      table.search(this.value).draw();
+    });
+
+    // Delete handler
+    $('#appointmentsListTable').off('click', '.delete-apt-btn')
+      .on('click', '.delete-apt-btn', function(){
+        const id = $(this).data('id');
+        if (!confirm('Delete this appointment?')) return;
+        $.post('delete_appointment.php', { id: id }, function(resp){
+          if (resp.success) table.ajax.reload();
+          else alert('Error: ' + resp.error);
+        }, 'json');
+      });
+  } // ← end loadTable()
+
+});  // ← end $(function(){…});
+// ─── Export CSV ───────────────────────────────────────────────
+  $('#btnExportAppt').click(function(){
+    // only export after user has toggled to table view
+    const flag = $('#filterTodayAll').val() || 'today';
+    window.location = 'appointments_export.php?flag='+encodeURIComponent(flag);
+  });
 </script>

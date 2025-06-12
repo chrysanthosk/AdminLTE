@@ -4,6 +4,43 @@
 require_once '../auth.php';
 requirePermission($pdo, 'reports.view');
 
+
+// ────────────────────────────────────────────────────────────────────────────
+// (A) Which report (if any) was requested?
+// ────────────────────────────────────────────────────────────────────────────
+$validReports = [
+  'top_clients_appts',
+  'top_clients_payments',
+  'top_therapists_appts',
+  'top_therapists_payments',
+  'first_appointments',
+  'gender_distribution',
+  'sales_appointments',
+  'sales_products',
+  'cashier_all',
+  'cashier_staff',
+  'cashier_service',
+  'cashier_products',
+  'z_reports',
+  'generated_zreports',
+  ''
+];
+
+$selectedReport = $_GET['report'] ?? '';  // safely gives '' if not present
+
+// OR, if you actually need to check for “no report selected”:
+if (!isset($_GET['report']) || $_GET['report'] === '') {
+    // render your default view, or redirect, or set a flag
+    // e.g.:
+    $selectedReport = null;
+} else {
+    $selectedReport = $_GET['report'];
+}
+
+if (!in_array($selectedReport, $validReports, true)) {
+  $selectedReport = '';  // no report selected → show only dropdown
+}
+
 // Function to delete Z report
 if (isset($_GET['action']) && $_GET['action']==='delete_zreport' && !empty($_GET['id'])) {
   $delId = (int)$_GET['id'];
@@ -17,7 +54,7 @@ if (isset($_GET['action']) && $_GET['action']==='delete_zreport' && !empty($_GET
 
 // If AJAX call to generate Z-report
 if ($_SERVER['REQUEST_METHOD']==='GET'
-  && $_GET['report']==='z_reports'
+  && $selectedReport === 'z_reports'
   && isset($_GET['generate_zreport'])
 ) {
   try {
@@ -56,31 +93,6 @@ if ($_SERVER['REQUEST_METHOD']==='GET'
   exit();
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// (A) Which report (if any) was requested?
-// ────────────────────────────────────────────────────────────────────────────
-$validReports = [
-  'top_clients_appts',
-  'top_clients_payments',
-  'top_therapists_appts',
-  'top_therapists_payments',
-  'first_appointments',
-  'gender_distribution',
-  'sales_appointments',
-  'sales_products',
-  'cashier_all',
-  'cashier_staff',
-  'cashier_service',
-  'cashier_products',
-  'z_reports',
-  'generated_zreports'
-];
-
-$selectedReport = $_GET['report'] ?? '';
-if (!in_array($selectedReport, $validReports, true)) {
-  $selectedReport = '';  // no report selected → show only dropdown
-}
-
 
 // ────────────────────────────────────────────────────────────────────────────
 // (B) Handle “Generate Z Report” submission (audit‐trail + redirect)
@@ -88,6 +100,8 @@ if (!in_array($selectedReport, $validReports, true)) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['generate_zreport'])) {
   $dateFrom = $_POST['zr_date_from'] ?? '';
   $dateTo   = $_POST['zr_date_to']   ?? '';
+
+  // 1) Validate dates
   if (
     !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateFrom) ||
     !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateTo)
@@ -96,19 +110,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['generate_zreport'])) 
     exit();
   }
 
+  // 2) Check for existing Z-report in that range
+  $stmtCheck = $pdo->prepare("
+    SELECT id 
+      FROM z_reports 
+     WHERE date_from = :from_date 
+       AND date_to   = :to_date
+     LIMIT 1
+  ");
+  $stmtCheck->execute([
+    ':from_date' => $dateFrom,
+    ':to_date'   => $dateTo,
+  ]);
+
+  if ($existing = $stmtCheck->fetch(PDO::FETCH_ASSOC)) {
+    // Already exists—just redirect to the print page
+    header("Location: zreport_print.php?report_id=" . (int)$existing['id']);
+    exit();
+  }
+
+  // 3) None found → create a new Z-report
   $pdo->beginTransaction();
-  $pdo->query("
+
+  // Insert with a placeholder report_number (0)…
+  $stmtIns = $pdo->prepare("
     INSERT INTO z_reports (report_number, date_from, date_to)
-    VALUES (0, '$dateFrom', '$dateTo')
+    VALUES (0, :from_date, :to_date)
   ");
+  $stmtIns->execute([
+    ':from_date' => $dateFrom,
+    ':to_date'   => $dateTo,
+  ]);
+
   $newId = (int)$pdo->lastInsertId();
-  $pdo->query("
+
+  // …then update it to its own ID
+  $stmtUpd = $pdo->prepare("
     UPDATE z_reports
-    SET report_number = {$newId}
-    WHERE id = {$newId}
+       SET report_number = :repnum
+     WHERE id = :id
   ");
+  $stmtUpd->execute([
+    ':repnum' => $newId,
+    ':id'     => $newId,
+  ]);
+
   $pdo->commit();
 
+  // 4) Log the action
   $userId = $_SESSION['user_id'] ?? null;
   $stmtLog = $pdo->prepare("
     INSERT INTO reports_log (user_id, report_type, parameters)
@@ -125,6 +174,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['generate_zreport'])) 
     'params' => $jsonParams
   ]);
 
+  // 5) Redirect to the new report
   header("Location: zreport_print.php?report_id={$newId}");
   exit();
 }
@@ -349,74 +399,74 @@ if ($selectedReport === 'top_clients_appts') {
     $stmt->execute();
     $salesAppts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-} elseif ($selectedReport === 'sales_products') {
-  // ─── C8: Sales (Products) ───────────────────────────────────────────────
+} // ─── C8: Sales (Products) ───────────────────────────────────────────────
+elseif ($selectedReport === 'sales_products') {
   $from_date = $_GET['from_date'] ?? date('Y-m-d');
-    $to_date   = $_GET['to_date']   ?? date('Y-m-d');
+  $to_date   = $_GET['to_date']   ?? date('Y-m-d');
 
-    $stmt = $pdo->prepare("
-      SELECT
-        s.id                                   AS sale_id,
-        s.sale_date,
-        COALESCE(
-          CONCAT(c.first_name, ' ', c.last_name),
-          'Walk-in'
-        ) AS client_name,
-        ANY_VALUE(
-          CONCAT(t.first_name, ' ', t.last_name)
-        ) AS therapist_name,
-        (
-          SELECT GROUP_CONCAT(
-            CONCAT(sv.name, ' (€', FORMAT(ss.unit_price,2), ')')
-            SEPARATOR '<br>'
-          )
-          FROM sale_services ss
-          JOIN services sv
-            ON ss.service_id = sv.id
-          WHERE ss.sale_id = s.id
-        ) AS services_list,
-        (
-          SELECT GROUP_CONCAT(
-            CONCAT(pv.name, ' (€', FORMAT(sp2.unit_price,2), ')')
-            SEPARATOR '<br>'
-          )
-          FROM sale_products sp2
-          JOIN products pv
-            ON sp2.product_id = pv.id
-          WHERE sp2.sale_id = s.id
-        ) AS products_list,
-        s.products_subtotal               AS price,
-        (
-          SELECT IFNULL(SUM(amount), 0)
-          FROM sale_payments spay
-          WHERE spay.sale_id = s.id
-        ) AS paid_amount,
-        (
-          SELECT GROUP_CONCAT(payment_method SEPARATOR ', ')
-          FROM sale_payments spay
-          WHERE spay.sale_id = s.id
-        ) AS pay_methods
-      FROM sales s
-      LEFT JOIN clients c
-        ON s.client_id = c.id
-      LEFT JOIN sale_services ss
-        ON s.id = ss.sale_id
-      LEFT JOIN sale_products sp
-        ON s.id = sp.sale_id
-      LEFT JOIN therapists t
-        ON sp.therapist_id = t.id
-      WHERE DATE(s.sale_date) BETWEEN :from_date AND :to_date
-        AND ss.sale_id IS NULL
-        AND sp.sale_id IS NOT NULL
-      GROUP BY s.id
-      ORDER BY s.sale_date DESC
-    ");
-    $stmt->bindValue('from_date', $from_date);
-    $stmt->bindValue('to_date',   $to_date);
-    $stmt->execute();
-    $salesPrd = $stmt->fetchAll(PDO::FETCH_ASSOC);
+  $stmt = $pdo->prepare("
+    SELECT
+      s.id                                   AS sale_id,
+      s.sale_date,
+      COALESCE(
+        CONCAT(c.first_name, ' ', c.last_name),
+        'Walk-in'
+      ) AS client_name,
+      ANY_VALUE(
+        CONCAT(t.first_name, ' ', t.last_name)
+      ) AS therapist_name,
+      (
+        SELECT GROUP_CONCAT(
+          CONCAT(sv.name, ' (€', FORMAT(ss.unit_price,2), ')')
+          SEPARATOR '<br>'
+        )
+        FROM sale_services ss
+        JOIN services sv
+          ON ss.service_id = sv.id
+        WHERE ss.sale_id = s.id
+      ) AS services_list,
+      (
+        SELECT GROUP_CONCAT(
+          CONCAT(pv.name, ' (€', FORMAT(sp2.unit_price,2), ')')
+          SEPARATOR '<br>'
+        )
+        FROM sale_products sp2
+        JOIN products pv
+          ON sp2.product_id = pv.id
+        WHERE sp2.sale_id = s.id
+      ) AS products_list,
+      s.products_subtotal               AS price,
+      (
+        SELECT IFNULL(SUM(amount), 0)
+        FROM sale_payments spay
+        WHERE spay.sale_id = s.id
+      ) AS paid_amount,
+      (
+        SELECT GROUP_CONCAT(payment_method SEPARATOR ', ')
+        FROM sale_payments spay
+        WHERE spay.sale_id = s.id
+      ) AS pay_methods
+    FROM sales s
+    LEFT JOIN clients c
+      ON s.client_id = c.id
 
-} elseif ($selectedReport === 'cashier_all') {
+    -- only join products, so we can require at least one product
+    LEFT JOIN sale_products sp
+      ON s.id = sp.sale_id
+    LEFT JOIN therapists t
+      ON sp.therapist_id = t.id
+
+    WHERE DATE(s.sale_date) BETWEEN :from_date AND :to_date
+      AND sp.sale_id IS NOT NULL    -- must have at least one product
+
+    GROUP BY s.id
+    ORDER BY s.sale_date DESC
+  ");
+  $stmt->bindValue('from_date', $from_date);
+  $stmt->bindValue('to_date',   $to_date);
+  $stmt->execute();
+  $salesPrd = $stmt->fetchAll(PDO::FETCH_ASSOC);
+}elseif ($selectedReport === 'cashier_all') {
   // ─── C9: Cashier (All) with date filters ────────────────────────────────
  $from_date = $_GET['from_date'] ?? date('Y-m-d');
    $to_date   = $_GET['to_date']   ?? date('Y-m-d');
@@ -829,8 +879,8 @@ elseif ($selectedReport === 'cashier_service') {
         <!-- Top 10 Clients (Appointments) with date filter -->
         <div class="card">
           <div class="card-header">
-            <h3 class="card-title">Top 10 Clients (Appointments)</h3>
-            <form method="GET" class="form-inline float-right">
+           ` <h3 class="card-title">Top 10 Clients (Appointments)</h3>
+            <form id="reportFilterForm" method="GET" class="form-inline float-right">
               <input type="hidden" name="report" value="top_clients_appts">
               <div class="form-group mr-2">
                 <label for="from_date_tc" class="mr-2">From:</label>
@@ -855,6 +905,9 @@ elseif ($selectedReport === 'cashier_service') {
                 >
               </div>
               <button type="submit" class="btn btn-sm btn-primary">Apply Filter</button>
+              <button id="btnExportReport" type="button" class="btn btn-sm btn-secondary">
+                <i class="fas fa-file-csv"></i> Export CSV
+              </button>
             </form>
           </div>
           <div class="card-body p-0">
@@ -880,7 +933,7 @@ elseif ($selectedReport === 'cashier_service') {
         <div class="card">
           <div class="card-header">
             <h3 class="card-title">Top 10 Clients (Payments)</h3>
-            <form method="GET" class="form-inline float-right">
+            <form id="reportFilterForm" method="GET" class="form-inline float-right">
               <input type="hidden" name="report" value="top_clients_payments">
               <div class="form-group mr-2">
                 <label for="from_date_tcp" class="mr-2">From:</label>
@@ -905,6 +958,9 @@ elseif ($selectedReport === 'cashier_service') {
                 >
               </div>
               <button type="submit" class="btn btn-sm btn-primary">Apply Filter</button>
+              <button id="btnExportReport" type="button" class="btn btn-sm btn-secondary">
+                <i class="fas fa-file-csv"></i> Export CSV
+              </button>
             </form>
           </div>
           <div class="card-body p-0">
@@ -930,7 +986,7 @@ elseif ($selectedReport === 'cashier_service') {
         <div class="card">
           <div class="card-header">
             <h3 class="card-title">Top 10 Therapists (Appointments)</h3>
-            <form method="GET" class="form-inline float-right">
+            <form id="reportFilterForm" method="GET" class="form-inline float-right">
               <input type="hidden" name="report" value="top_therapists_appts">
               <div class="form-group mr-2">
                 <label for="from_date_tta" class="mr-2">From:</label>
@@ -955,6 +1011,9 @@ elseif ($selectedReport === 'cashier_service') {
                 >
               </div>
               <button type="submit" class="btn btn-sm btn-primary">Apply Filter</button>
+              <button id="btnExportReport" type="button" class="btn btn-sm btn-secondary">
+                <i class="fas fa-file-csv"></i> Export CSV
+              </button>
             </form>
           </div>
           <div class="card-body p-0">
@@ -980,7 +1039,7 @@ elseif ($selectedReport === 'cashier_service') {
         <div class="card">
           <div class="card-header">
             <h3 class="card-title">Top 10 Therapists (Payments)</h3>
-            <form method="GET" class="form-inline float-right">
+            <form id="reportFilterForm" method="GET" class="form-inline float-right">
               <input type="hidden" name="report" value="top_therapists_payments">
               <div class="form-group mr-2">
                 <label for="from_date_ttp" class="mr-2">From:</label>
@@ -1005,6 +1064,9 @@ elseif ($selectedReport === 'cashier_service') {
                 >
               </div>
               <button type="submit" class="btn btn-sm btn-primary">Apply Filter</button>
+              <button id="btnExportReport" type="button" class="btn btn-sm btn-secondary">
+                <i class="fas fa-file-csv"></i> Export CSV
+              </button>
             </form>
           </div>
           <div class="card-body p-0">
@@ -1030,7 +1092,7 @@ elseif ($selectedReport === 'cashier_service') {
         <div class="card">
           <div class="card-header">
             <h3 class="card-title">First Appointment (per Client)</h3>
-            <form method="GET" class="form-inline float-right">
+            <form id="reportFilterForm" method="GET" class="form-inline float-right">
               <input type="hidden" name="report" value="first_appointments">
               <div class="form-group mr-2">
                 <label for="from_date_fa" class="mr-2">From:</label>
@@ -1055,6 +1117,9 @@ elseif ($selectedReport === 'cashier_service') {
                 >
               </div>
               <button type="submit" class="btn btn-sm btn-primary">Apply Filter</button>
+              <button id="btnExportReport" type="button" class="btn btn-sm btn-secondary">
+                <i class="fas fa-file-csv"></i> Export CSV
+              </button>
             </form>
           </div>
           <div class="card-body p-0">
@@ -1080,7 +1145,7 @@ elseif ($selectedReport === 'cashier_service') {
         <div class="card">
           <div class="card-header">
             <h3 class="card-title">Clients by Gender</h3>
-            <form method="GET" class="form-inline float-right">
+            <form id="reportFilterForm" method="GET" class="form-inline float-right">
               <input type="hidden" name="report" value="gender_distribution">
               <div class="form-group mr-2">
                 <label for="from_date_gd" class="mr-2">From:</label>
@@ -1105,6 +1170,9 @@ elseif ($selectedReport === 'cashier_service') {
                 >
               </div>
               <button type="submit" class="btn btn-sm btn-primary">Apply Filter</button>
+              <button id="btnExportReport" type="button" class="btn btn-sm btn-secondary">
+                <i class="fas fa-file-csv"></i> Export CSV
+              </button>
             </form>
           </div>
           <div class="card-body p-0">
@@ -1129,7 +1197,7 @@ elseif ($selectedReport === 'cashier_service') {
         <div class="card">
           <div class="card-header">
             <h3 class="card-title">Sales (Appointments)</h3>
-            <form method="GET" class="form-inline float-right">
+            <form id="reportFilterForm" method="GET" class="form-inline float-right">
               <input type="hidden" name="report" value="sales_appointments">
               <div class="form-group mr-2">
                 <label for="from_date_sa" class="mr-2">From:</label>
@@ -1154,6 +1222,9 @@ elseif ($selectedReport === 'cashier_service') {
                 >
               </div>
               <button type="submit" class="btn btn-sm btn-primary">Apply Filter</button>
+              <button id="btnExportReport" type="button" class="btn btn-sm btn-secondary">
+                <i class="fas fa-file-csv"></i> Export CSV
+              </button>
             </form>
           </div>
           <div class="card-body p-0">
@@ -1197,7 +1268,7 @@ elseif ($selectedReport === 'cashier_service') {
         <div class="card">
           <div class="card-header">
             <h3 class="card-title">Sales (Products)</h3>
-            <form method="GET" class="form-inline float-right">
+            <form id="reportFilterForm" method="GET" class="form-inline float-right">
               <input type="hidden" name="report" value="sales_products">
               <div class="form-group mr-2">
                 <label for="from_date_sp" class="mr-2">From:</label>
@@ -1222,6 +1293,9 @@ elseif ($selectedReport === 'cashier_service') {
                 >
               </div>
               <button type="submit" class="btn btn-sm btn-primary">Apply Filter</button>
+              <button id="btnExportReport" type="button" class="btn btn-sm btn-secondary">
+                <i class="fas fa-file-csv"></i> Export CSV
+              </button>
             </form>
           </div>
           <div class="card-body p-0">
@@ -1264,7 +1338,7 @@ elseif ($selectedReport === 'cashier_service') {
         <div class="card">
           <div class="card-header">
             <h3 class="card-title">Cashier (All)</h3>
-            <form method="GET" class="form-inline float-right">
+            <form id="reportFilterForm" method="GET" class="form-inline float-right">
               <input type="hidden" name="report" value="cashier_all">
               <div class="form-group mr-2">
                 <label for="from_date_ca" class="mr-2">From:</label>
@@ -1289,6 +1363,9 @@ elseif ($selectedReport === 'cashier_service') {
                 >
               </div>
               <button type="submit" class="btn btn-sm btn-primary">Apply Filter</button>
+              <button id="btnExportReport" type="button" class="btn btn-sm btn-secondary">
+                <i class="fas fa-file-csv"></i> Export CSV
+              </button>
             </form>
           </div>
           <div class="card-body p-0">
@@ -1349,7 +1426,7 @@ elseif ($selectedReport === 'cashier_service') {
         <div class="card">
           <div class="card-header">
             <h3 class="card-title">Cashier (Therapist)</h3>
-            <form method="GET" class="form-inline float-right">
+            <form id="reportFilterForm" method="GET" class="form-inline float-right">
               <input type="hidden" name="report" value="cashier_staff">
               <div class="form-group mr-2">
                 <label for="therapist_id_cs" class="mr-2">Therapist:</label>
@@ -1389,6 +1466,9 @@ elseif ($selectedReport === 'cashier_service') {
                 >
               </div>
               <button type="submit" class="btn btn-sm btn-primary">Apply Filter</button>
+              <button id="btnExportReport" type="button" class="btn btn-sm btn-secondary">
+                <i class="fas fa-file-csv"></i> Export CSV
+              </button>
             </form>
           </div>
           <div class="card-body p-0">
@@ -1435,7 +1515,7 @@ elseif ($selectedReport === 'cashier_service') {
         <div class="card">
           <div class="card-header">
             <h3 class="card-title">Cashier (Service)</h3>
-            <form method="GET" class="form-inline float-right">
+            <form id="reportFilterForm" method="GET" class="form-inline float-right">
               <input type="hidden" name="report" value="cashier_service">
               <div class="form-group mr-2">
                 <label for="service_id_cs" class="mr-2">Service:</label>
@@ -1475,6 +1555,9 @@ elseif ($selectedReport === 'cashier_service') {
                 >
               </div>
               <button type="submit" class="btn btn-sm btn-primary">Apply Filter</button>
+              <button id="btnExportReport" type="button" class="btn btn-sm btn-secondary">
+                <i class="fas fa-file-csv"></i> Export CSV
+              </button>
             </form>
           </div>
           <div class="card-body p-0">
@@ -1521,7 +1604,7 @@ elseif ($selectedReport === 'cashier_service') {
         <div class="card">
           <div class="card-header">
             <h3 class="card-title">Cashier (Products)</h3>
-            <form method="GET" class="form-inline float-right">
+            <form id="reportFilterForm" method="GET" class="form-inline float-right">
               <input type="hidden" name="report" value="cashier_products">
               <div class="form-group mr-2">
                 <label for="product_id_cp" class="mr-2">Product:</label>
@@ -1561,6 +1644,9 @@ elseif ($selectedReport === 'cashier_service') {
                 >
               </div>
               <button type="submit" class="btn btn-sm btn-primary">Apply Filter</button>
+              <button id="btnExportReport" type="button" class="btn btn-sm btn-secondary">
+                <i class="fas fa-file-csv"></i> Export CSV
+              </button>
             </form>
           </div>
           <div class="card-body p-0">
@@ -1693,30 +1779,39 @@ $(document).ready(function() {
     $('.select2').select2({ width: '100%' });
   }
 });
+  const currentReport = '<?= addslashes($selectedReport) ?>';
 
-document.getElementById('btnGenerateZ').addEventListener('click', async () => {
-  // Grab the dates
-  const from = document.getElementById('zr_date_from').value;
-  const to   = document.getElementById('zr_date_to').value;
-
-  // 1) Call the same reports.php endpoint to generate the Z-report.
-  //    We pass generate_zreport=1 plus the dates.
-  const resp = await fetch(`reports.php?report=z_reports&generate_zreport=1&from_date=${from}&to_date=${to}`, {
-    credentials: 'same-origin'
-  });
-  // 2) Expect a JSON response { success: true, report_id: 42 }
-  const data = await resp.json();
-  if (!data.success) {
-    return alert('Error generating Z Report: ' + data.error);
+$('#btnExportReport').on('click', function() {
+  if (!currentReport) {
+    return alert('No report selected.');
   }
-
-  // 3) Open the print popup with the new report_id
-  window.open(
-    `zreport_print.php?report_id=${data.report_id}`,
-    '_blank',
-    'toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes,width=320,height=600'
-  );
+  const qs  = $('#reportFilterForm').serialize();
+  const url = 'reports_export.php?report='
+            + encodeURIComponent(currentReport)
+            + (qs ? '&' + qs : '');
+  window.open(url, '_blank');
 });
+
+const btnZ = document.getElementById('btnGenerateZ');
+  if (btnZ) {
+    btnZ.addEventListener('click', async () => {
+      const from = document.getElementById('zr_date_from').value;
+      const to   = document.getElementById('zr_date_to').value;
+      const resp = await fetch(
+        `reports.php?report=z_reports&generate_zreport=1&from_date=${from}&to_date=${to}`,
+        { credentials: 'same-origin' }
+      );
+      const data = await resp.json();
+      if (!data.success) {
+        return alert('Error generating Z Report: ' + data.error);
+      }
+      window.open(
+        `zreport_print.php?report_id=${data.report_id}`,
+        '_blank',
+        'toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes,width=320,height=600'
+      );
+    });
+  };
 </script>
 </body>
 </html>
