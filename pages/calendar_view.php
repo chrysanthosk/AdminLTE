@@ -6,7 +6,25 @@ requirePermission($pdo, 'appointment.manage');
 ?>
 <?php include '../includes/header.php'; ?>
 <?php include '../includes/sidebar.php'; ?>
-
+<?php
+  // Build the same $jsRes array of therapists for your “Add Appointment” modal
+  $tstmt = $pdo->prepare("
+    SELECT id, first_name, last_name, color, position
+      FROM therapists
+     WHERE show_in_calendar = 1
+     ORDER BY position ASC, first_name ASC
+  ");
+  $tstmt->execute();
+  $therapists = $tstmt->fetchAll(PDO::FETCH_ASSOC);
+  $jsRes = [];
+  foreach ($therapists as $t) {
+    $jsRes[] = [
+      'id'         => $t['id'],
+      'title'      => "{$t['first_name']} {$t['last_name']}",
+      'eventColor' => $t['color']
+    ];
+  }
+?>
 <!-- ─── CSS Includes ─────────────────────────────────────────────────────────────── -->
 
 <!-- FullCalendar Scheduler CSS (make sure these files exist under /assets/fullcalendar-scheduler/) -->
@@ -221,12 +239,7 @@ $(document).ready(function() {
   // ─── (1) Load & initialize “Add Appointment” form when modal opens ───────────────
   $('#addApptModal').on('shown.bs.modal', function() {
     const container = $('#addApptFormContainer');
-    container.html(`
-      <div class="text-center">
-        <i class="fas fa-spinner fa-spin"></i> Loading…
-      </div>
-    `);
-
+    container.html(`<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading…</div>`);
     $.ajax({
       url: '/pages/appointments.php',
       method: 'GET',
@@ -234,7 +247,7 @@ $(document).ready(function() {
       success: function(html) {
         container.html(html);
 
-        // (1A) Initialize Select2 on “Existing Client” & other dropdowns
+        // (1A) Select2
         if (typeof $.fn.select2 !== 'function') {
           console.error('Select2 did NOT load!');
           return;
@@ -243,37 +256,33 @@ $(document).ready(function() {
           placeholder: 'Type to search clients…',
           allowClear: true,
           width: '100%',
-          dropdownParent: $('#addApptModal')   // ← WAS #addAppointmentModal
+          dropdownParent: $('#addApptModal')
         });
         $('#staffSelect, #serviceSelect').select2({
           theme: 'bootstrap4',
           width: '100%',
           allowClear: true,
-          dropdownParent: $('#addApptModal')   // ← WAS #addAppointmentModal
+          dropdownParent: $('#addApptModal')
         });
 
-        // (1B) Verify FullCalendar is loaded
+        // (1B) FullCalendar loaded?
         if (
           typeof FullCalendar === 'undefined' ||
           typeof FullCalendar.Calendar !== 'function' ||
           typeof FullCalendar.Draggable !== 'function' ||
           !Array.isArray(FullCalendar.globalPlugins)
         ) {
-          console.error('FullCalendar Scheduler UMD did not load.');
+          console.error('FullCalendar did not load.');
           return;
         }
         const plugins = FullCalendar.globalPlugins;
 
-        // (1C) Bind FullCalendar.Draggable to services in #serviceList
+        // (1C) Bind Draggable services
         $('#serviceList .draggable-service').each(function() {
           if (!$(this).data('draggableBound')) {
             const serviceId = $(this).data('service-id');
-            const eventObj  = {
-              title: $(this).text().trim(),
-              extendedProps: { service_id: serviceId }
-            };
+            const eventObj = { title: $(this).text().trim(), extendedProps: { service_id: serviceId } };
             $(this).data('event', eventObj);
-
             new FullCalendar.Draggable(this, {
               itemSelector: '.draggable-service',
               eventData: () => $(this).data('event')
@@ -282,30 +291,17 @@ $(document).ready(function() {
           }
         });
 
-        // (1D) Build the mini-calendar inside the modal
+        // (1D) Mini‐calendar in modal
         const modalEl = document.getElementById('appointmentCalendarModal');
         const modalCalendar = new FullCalendar.Calendar(modalEl, {
           schedulerLicenseKey: 'GPL-My-Project-Is-Open-Source',
           plugins: plugins,
           locale: 'en-gb',
           timeZone: 'local',
-
-          // Modal’s 1-day/3-day/5-day views
           views: {
-            resourceTimeGridDay: {
-              type: 'resourceTimeGrid',
-              buttonText: '1 day'
-            },
-            resourceTimeGridThreeDay: {
-              type: 'resourceTimeGrid',
-              duration: { days: 3 },
-              buttonText: '3 days'
-            },
-            resourceTimeGridFiveDay: {
-              type: 'resourceTimeGrid',
-              duration: { days: 5 },
-              buttonText: '5 days'
-            }
+            resourceTimeGridDay: { type: 'resourceTimeGrid', buttonText: '1 day' },
+            resourceTimeGridThreeDay: { type: 'resourceTimeGrid', duration: { days: 3 }, buttonText: '3 days' },
+            resourceTimeGridFiveDay: { type: 'resourceTimeGrid', duration: { days: 5 }, buttonText: '5 days' }
           },
           initialView: 'resourceTimeGridDay',
           slotMinTime: '06:00:00',
@@ -313,7 +309,6 @@ $(document).ready(function() {
           slotDuration: '00:05:00',
           slotLabelInterval: '00:15:00',
           allDaySlot: false,
-
           headerToolbar: {
             left: 'prev,next today',
             center: 'title',
@@ -321,206 +316,92 @@ $(document).ready(function() {
           },
           nowIndicator: true,
           slotLabelFormat: { hour: 'numeric', minute: '2-digit', hour12: true },
-
-          // Abbreviated weekday + full month/year in modal title
           titleFormat: { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' },
-
-          // Load therapists as resources (same PHP logic as appointments.php)
-          resources: <?php
-            $tstmt = $pdo->prepare("
-              SELECT id, first_name, last_name, color, position
-                FROM therapists
-               WHERE show_in_calendar = 1
-               ORDER BY position ASC, first_name ASC
-            ");
-            $tstmt->execute();
-            $therapists = $tstmt->fetchAll(PDO::FETCH_ASSOC);
-            $jsRes = [];
-            foreach ($therapists as $t) {
-              $jsRes[] = [
-                'id'         => $t['id'],
-                'title'      => "{$t['first_name']} {$t['last_name']}",
-                'eventColor' => $t['color']
-              ];
-            }
-            echo json_encode($jsRes);
-          ?>,
+          resources: <?= json_encode($jsRes) ?>,
           editable: true,
           droppable: true,
           eventResizableFromStart: true,
           eventDurationEditable: true,
-
-          // (D3) Only keep the newest dropped service event
           eventReceive: function(info) {
-            const allEv = modalCalendar.getEvents();
-            if (allEv.length > 1) {
-              allEv[0].remove();
-            }
+            const evs = modalCalendar.getEvents();
+            if (evs.length > 1) evs[0].remove();
           },
-
-          // (D4) Clicking an event in modal removes it immediately
-          eventClick: function(info) {
-            info.event.remove();
-          },
-
-          // (D5) Flash any “now” event in modal
+          eventClick: function(info) { info.event.remove(); },
           eventClassNames: function(arg) {
-            const now     = new Date();
-            const evStart = arg.event.start;
-            const evEnd   = arg.event.end || new Date(evStart.getTime() + 30 * 60000);
-            if (now >= evStart && now < evEnd) {
-              return ['blinking-event'];
-            }
-            return [];
+            const now = new Date(), s = arg.event.start, e = arg.event.end || new Date(s.getTime()+1800000);
+            return (now>=s && now<e) ? ['blinking-event'] : [];
           },
-
-          // (D6) Compact multi-day title in modal
           datesSet: function(arg) {
             const vt = arg.view.type;
-            if (vt === 'resourceTimeGridThreeDay' || vt === 'resourceTimeGridFiveDay') {
-              const start = arg.view.currentStart;
-              const end   = new Date(arg.view.currentEnd.getTime() - 1);
-
-              const startText = new Intl.DateTimeFormat('en-US', {
-                weekday: 'short',
-                day: 'numeric'
-              }).format(start);
-
-              const endText = new Intl.DateTimeFormat('en-US', {
-                weekday: 'short',
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric'
-              }).format(end);
-
-              const titleEl = document.querySelector('.fc-toolbar-title');
-              if (titleEl) {
-                titleEl.innerText = startText + ' — ' + endText;
-              }
+            if (vt==='resourceTimeGridThreeDay'||vt==='resourceTimeGridFiveDay') {
+              const start = arg.view.currentStart, end = new Date(arg.view.currentEnd.getTime()-1);
+              const st = new Intl.DateTimeFormat('en-US',{weekday:'short',day:'numeric'}).format(start);
+              const et = new Intl.DateTimeFormat('en-US',{weekday:'short',day:'numeric',month:'long',year:'numeric'}).format(end);
+              document.querySelector('.fc-toolbar-title').innerText = st + ' — ' + et;
             }
-            // Single-day uses “Thu, June 5, 2025” by titleFormat
           },
-
           events: []
         });
         modalCalendar.render();
         $('#addApptModal').data('calendarInstance', modalCalendar);
 
-        // (1E) “Go To Date” input in modal
+        // (1E) Go To Date
         $('#goToDate').off('change').on('change', function() {
-          const val = $(this).val();
-          if (val) {
-            modalCalendar.gotoDate(val);
-          }
+          modalCalendar.gotoDate(this.value);
         });
-        // Initialize “Go To Date” to today
-        const today = new Date();
-        const yyyy  = today.getFullYear();
-        const MM    = String(today.getMonth() + 1).padStart(2, '0');
-        const dd    = String(today.getDate()).padStart(2, '0');
-        $('#goToDate').val(`${yyyy}-${MM}-${dd}`);
-        modalCalendar.gotoDate(`${yyyy}-${MM}-${dd}`);
+        const today = new Date(), iso = today.toISOString().slice(0,10);
+        $('#goToDate').val(iso);
+        modalCalendar.gotoDate(iso);
       },
       error: function() {
-        container.html(`
-          <div class="alert alert-danger">
-            Unable to load form. Please try again later.
-          </div>
-        `);
+        container.html('<div class="alert alert-danger">Unable to load form. Please try again later.</div>');
       }
     });
   });
 
-  // ─── (2) When modal hides, destroy mini-calendar & reset form ───────────────────
+  // ─── (2) Destroy mini‐calendar on hide ──────────────────────────────────────────
   $('#addApptModal').on('hide.bs.modal', function() {
     const cal = $(this).data('calendarInstance');
-    if (cal) {
-      cal.destroy();
-      $(this).removeData('calendarInstance');
-    }
-    $('#appointmentForm')[0].reset();
+    if (cal) cal.destroy();
+    $(this).removeData('calendarInstance');
+    $('#appointmentForm')[0]?.reset();
     $('#serviceList .draggable-service').removeData('event');
     $('.modal-backdrop').remove();
-    // Retain data-draggableBound so services remain draggable next open
   });
 
-  // ─── (3) Filter Services by Category (delegated) ────────────────────────────────
+  // ─── (3) Filter Services by Category ──────────────────────────────────────────
   $(document).on('click', '.category-filter', function() {
     const catId = $(this).data('category-id');
     $('#serviceList .draggable-service').each(function() {
-      const svcCat = $(this).data('category-id');
-      if (!catId || svcCat == catId) {
-        $(this).show();
-      } else {
-        $(this).hide();
-      }
+      $(this).toggle(!catId || $(this).data('category-id') == catId);
     });
   });
 
-  // ─── (4) Handle “Add Appointment” form submit inside modal ───────────────────────
+  // ─── (4) Submit “Add Appointment” ──────────────────────────────────────────
   $(document).on('submit', '#appointmentForm', function(e) {
     e.preventDefault();
-
-    const modalCal = $('#addApptModal').data('calendarInstance');
-    if (!modalCal) {
-      return alert('Calendar not ready—please reopen the modal.');
-    }
-
-    const evList = modalCal.getEvents();
-    if (evList.length === 0 || !evList[0].start) {
+    const cal = $('#addApptModal').data('calendarInstance');
+    const evs = cal?.getEvents() || [];
+    if (!evs.length || !evs[0].start) {
       return alert('Please drag a service onto the calendar to pick a time.');
     }
-    const ev = evList[evList.length - 1];
+    const ev = evs[evs.length-1];
+    const fmt = dt => dt.toISOString().slice(0,19).replace('T',' ');
+    const data = {
+      service_id: ev.extendedProps.service_id,
+      start_iso:  fmt(ev.start),
+      end_iso:    fmt(ev.end || new Date(ev.start.getTime()+30*60000)),
+      staff_id:   ev.getResources()[0].id,
+      notes:      $('#notes').val().trim(),
+      send_sms:   $('#sendSmsToggle').is(':checked')?1:0
+    };
+    // existing vs new client
+    const ex = $('#existingClient').val(), nN = $('#newClientName').val().trim(), nP = $('#newClientPhone').val().trim();
+    if (ex) { data.client_id = ex; }
+    else if (nN && nP) { data.client_name = nN; data.client_phone = nP; }
+    else { return alert('Select existing client or enter name & phone.'); }
 
-    function formatLocal(dt) {
-      const yyyy = dt.getFullYear();
-      const MM   = String(dt.getMonth() + 1).padStart(2, '0');
-      const dd   = String(dt.getDate()).padStart(2, '0');
-      const hh   = String(dt.getHours()).padStart(2, '0');
-      const mm   = String(dt.getMinutes()).padStart(2, '0');
-      return `${yyyy}-${MM}-${dd} ${hh}:${mm}:00`;
-    }
-    const startLocal = formatLocal(ev.start);
-    const endDateObj = ev.end || new Date(ev.start.getTime() + 30 * 60000);
-    const endLocal   = formatLocal(endDateObj);
-
-    const resources = ev.getResources();
-    if (!resources || resources.length === 0) {
-      return alert('Could not find assigned staff—drop onto a staff row.');
-    }
-    const staffId = resources[0].id;
-
-    // Determine client (existing vs new)
-    const existingClientId = $('#existingClient').val();
-    const newClientName    = $('#newClientName').val().trim();
-    const newClientPhone   = $('#newClientPhone').val().trim();
-    let clientId   = null;
-    let clientName = null;
-    let clientPhone= null;
-    if (existingClientId) {
-      clientId = existingClientId;
-    } else if (newClientName && newClientPhone) {
-      clientName  = newClientName;
-      clientPhone = newClientPhone;
-    } else {
-      return alert('Select existing client or enter name & phone for new client.');
-    }
-
-    const notes   = $('#notes').val().trim();
-    const sendSms = $('#sendSmsToggle').is(':checked') ? 1 : 0;
-
-    // POST to save_appointment.php
-    $.post('/pages/save_appointment.php', {
-      service_id:   ev.extendedProps.service_id,
-      start_iso:    startLocal,
-      end_iso:      endLocal,
-      staff_id:     staffId,
-      client_id:    clientId,
-      client_name:  clientName,
-      client_phone: clientPhone,
-      notes:        notes,
-      send_sms:     sendSms
-    }, function(resp) {
+    $.post('/pages/save_appointment.php', data, function(resp) {
       if (resp.success) {
         $('#addApptModal').modal('hide');
         mainCalendar.refetchEvents();
@@ -529,6 +410,16 @@ $(document).ready(function() {
       }
     }, 'json');
   });
+
+  // Utility to format a JS Date as "YYYY-MM-DD HH:mm:00" in the browser's local time
+  function formatLocal(dt) {
+    const yyyy = dt.getFullYear();
+    const MM   = String(dt.getMonth() + 1).padStart(2, '0');
+    const dd   = String(dt.getDate()).padStart(2, '0');
+    const hh   = String(dt.getHours()).padStart(2, '0');
+    const mm   = String(dt.getMinutes()).padStart(2, '0');
+    return `${yyyy}-${MM}-${dd} ${hh}:${mm}:00`;
+  }
 
   // ─── (5) Initialize Main Calendar ───────────────────────────────────────────────
   let mainCalendar;
@@ -540,203 +431,154 @@ $(document).ready(function() {
         schedulerLicenseKey: 'GPL-My-Project-Is-Open-Source',
         plugins: FullCalendar.globalPlugins,
         timeZone: 'local',
-
-        // Define main views: 1-day / 3-day / 5-day / month
         initialView: 'resourceTimeGridDay',
         height: window.innerHeight - 130,
         views: {
-          resourceTimeGridDay: {
-            type: 'resourceTimeGrid',
-            buttonText: '1 day'
-          },
-          resourceTimeGridThreeDay: {
-            type: 'resourceTimeGrid',
-            duration: { days: 3 },
-            buttonText: '3 days'
-          },
-          resourceTimeGridFiveDay: {
-            type: 'resourceTimeGrid',
-            duration: { days: 5 },
-            buttonText: '5 days'
-          },
-          month: {
-            // Abbreviate month title: “Jun 2025”
-            titleFormat: { month: 'short', year: 'numeric' }
-          }
+          resourceTimeGridDay:  { type:'resourceTimeGrid', buttonText:'1 day' },
+          resourceTimeGridThreeDay: { type:'resourceTimeGrid', duration:{days:3}, buttonText:'3 days' },
+          resourceTimeGridFiveDay:  { type:'resourceTimeGrid', duration:{days:5}, buttonText:'5 days' },
+          month: { titleFormat:{month:'short',year:'numeric'} }
         },
-
-        slotMinTime: '06:00:00',
-        slotMaxTime: '22:00:00',
-        slotDuration: '00:05:00',
-        slotLabelInterval: '00:15:00',
-        allDaySlot: false,
-
         headerToolbar: {
           left: 'prev,next today',
           center: 'title',
           right: 'resourceTimeGridDay,resourceTimeGridThreeDay,resourceTimeGridFiveDay'
         },
-
+        slotMinTime: '06:00:00',
+        slotMaxTime: '22:00:00',
+        slotDuration: '00:05:00',
+        slotLabelInterval: '00:15:00',
+        allDaySlot: false,
         nowIndicator: true,
-
-        // Abbreviate weekday headers in month view
-        dayHeaderFormat: { weekday: 'short' },
-
-        slotLabelFormat: { hour: 'numeric', minute: '2-digit', hour12: true },
-
-        // Default title for single-day; multi-day overridden below
-        titleFormat: { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' },
-
+        dayHeaderFormat: { weekday:'short' },
+        slotLabelFormat: { hour:'numeric', minute:'2-digit', hour12:true },
+        titleFormat:     { weekday:'long', day:'numeric', month:'long', year:'numeric' },
         resources: resources,
         events: '/pages/appointment_events.php',
         editable: true,
+        selectable: true,
         eventResizableFromStart: true,
         eventDurationEditable: true,
-        selectable: true,
 
-        // (E1) Flash any “now” appointment
+        // Flash “now” appointment
         eventClassNames: function(arg) {
-          const now     = new Date();
-          const evStart = arg.event.start;
-          const evEnd   = arg.event.end || new Date(evStart.getTime() + 30 * 60000);
-          if (now >= evStart && now < evEnd) {
-            return ['blinking-event'];
-          }
-          return [];
+          const now = new Date(), s = arg.event.start, e = arg.event.end || new Date(s.getTime()+1800000);
+          return (now>=s && now<e) ? ['blinking-event'] : [];
         },
 
-        // (E2) Compact multi-day title: “5 Thu — 7 Sat June 2025”
+        // Compact multi-day title
         datesSet: function(arg) {
           const vt = arg.view.type;
-          if (vt === 'resourceTimeGridThreeDay' || vt === 'resourceTimeGridFiveDay') {
-            const start = arg.view.currentStart;
-            const end   = new Date(arg.view.currentEnd.getTime() - 1);
-
-            const startText = new Intl.DateTimeFormat('en-US', {
-              weekday: 'short',
-              day: 'numeric'
-            }).format(start);
-
-            const endText = new Intl.DateTimeFormat('en-US', {
-              weekday: 'short',
-              day: 'numeric',
-              month: 'long',
-              year: 'numeric'
-            }).format(end);
-
-            const titleEl = document.querySelector('.fc-toolbar-title');
-            if (titleEl) {
-              titleEl.innerText = startText + ' — ' + endText;
-            }
+          if (vt==='resourceTimeGridThreeDay'||vt==='resourceTimeGridFiveDay') {
+            const start = arg.view.currentStart, end = new Date(arg.view.currentEnd.getTime()-1);
+            const st = new Intl.DateTimeFormat('en-US',{weekday:'short',day:'numeric'}).format(start);
+            const et = new Intl.DateTimeFormat('en-US',{weekday:'short',day:'numeric',month:'long',year:'numeric'}).format(end);
+            document.querySelector('.fc-toolbar-title').innerText = st + ' — ' + et;
           }
-          // Single-day (“resourceTimeGridDay”) uses default titleFormat
         },
 
-        // (E3) Drag existing appointment to new time/staff
+        //  Drag existing appointment to new time/staff
         eventDrop: function(info) {
-          const ev    = info.event;
-          const id    = ev.id;
-          const start = ev.start;
-          const end   = ev.end || new Date(ev.start.getTime() + 30 * 60000);
-          function formatLocal(dt) {
-            const yyyy = dt.getFullYear();
-            const MM   = String(dt.getMonth() + 1).padStart(2, '0');
-            const dd   = String(dt.getDate()).padStart(2, '0');
-            const hh   = String(dt.getHours()).padStart(2, '0');
-            const mm   = String(dt.getMinutes()).padStart(2, '0');
-            return `${yyyy}-${MM}-${dd} ${hh}:${mm}:00`;
-          }
-          $.post('/pages/update_appointment_time.php', {
-            id:         id,
-            start_time: formatLocal(start),
-            end_time:   formatLocal(end)
-          }, function(resp) {
-            if (!resp.success) {
+          const ev = info.event;
+          const data = {
+            id:         ev.id,
+            start_time: formatLocal(ev.start),
+            // if no ev.end (resize via drop), assume 30m duration
+            end_time:   formatLocal(ev.end || new Date(ev.start.getTime() + 30*60000)),
+            staff_id:   ev.getResources()[0]?.id
+          };
+          $.post('/pages/update_appointment_time.php', data, function(resp) {
+            if (resp.success) {
+              mainCalendar.refetchEvents();
+            } else {
               alert('Could not update appointment: ' + resp.error);
               info.revert();
             }
           }, 'json');
         },
 
-        // (E4) Resize existing appointment
-        eventResize: function(info) {
-          const ev    = info.event;
-          const id    = ev.id;
-          const start = ev.start;
-          const end   = ev.end;
-          function formatLocal(dt) {
-            const yyyy = dt.getFullYear();
-            const MM   = String(dt.getMonth() + 1).padStart(2, '0');
-            const dd   = String(dt.getDate()).padStart(2, '0');
-            const hh   = String(dt.getHours()).padStart(2, '0');
-            const mm   = String(dt.getMinutes()).padStart(2, '0');
-            return `${yyyy}-${MM}-${dd} ${hh}:${mm}:00`;
-          }
-          $.post('/pages/update_appointment.php', {
-            id:         id,
-            start_time: formatLocal(start),
-            end_time:   formatLocal(end)
-          }, function(resp) {
-            if (!resp.success) {
+        // Resize existing appointment → save new time/staff
+       eventResize: function(info) {
+          const ev = info.event;
+          const data = {
+            id:         ev.id,
+            start_time: formatLocal(ev.start),
+            end_time:   formatLocal(ev.end   || new Date(ev.start.getTime() + 30*60000)),
+            staff_id:   ev.getResources()[0]?.id
+          };
+          $.post('/pages/update_appointment_time.php', data, function(resp) {
+            if (resp.success) {
+              mainCalendar.refetchEvents();
+            } else {
               alert('Could not update appointment: ' + resp.error);
               info.revert();
             }
           }, 'json');
         },
 
-        // (E5) Click to edit (placeholder)
+        // Click → edit inline
         eventClick: function(info) {
-          // You can open an edit modal if desired
+          const id = info.event.id;
+          $('#editAppointmentBody').html('<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading…</div>');
+          $('#editAppointmentModal').modal('show');
+          $.get('/pages/appointments_edit.php', { id: id }, function(html) {
+            $('#editAppointmentBody').html(html);
+            $('#editAppointmentForm').off('submit').on('submit', function(e) {
+              e.preventDefault();
+              $.post('/pages/update_appointment.php', $(this).serialize(), function(resp) {
+                if (resp.success) {
+                  $('#editAppointmentModal').modal('hide');
+                  mainCalendar.refetchEvents();
+                } else {
+                  alert('Error: ' + resp.error);
+                }
+              }, 'json');
+            });
+          });
         }
       });
+
       mainCalendar.render();
 
+      // Sidebar collapse/expand → resize
       $(document).on('collapsed.lte.pushmenu expanded.lte.pushmenu', function() {
         setTimeout(() => mainCalendar.updateSize(), 300);
       });
-
-         $('.main-sidebar').on('transitionend', () => {
-              mainCalendar.updateSize();
-            });
+      $('.main-sidebar').on('transitionend', () => mainCalendar.updateSize());
     });
-   // ---- EDIT ----
-        // ─── Edit appointment ─────────────────────────
-         $('.edit-apt-btn').on('click', function(){
-           const id = $(this).data('id');
-           // Load the edit form via AJAX into the modal
-           $('#editAppointmentModal .modal-body')
-             .load('/pages/edit_appointment.php?id=' + id, function(){
-                $('#editAppointmentModal').modal('show');
-             });
-         });
 
-     // Delegate save button inside dynamically loaded content
-       //$(document).on('click','#saveAppointmentBtn',function(){
-       //  var f = $('#editAppointmentBody').find('form');
-        // $.post('save_appointment.php', f.serialize(), function(resp){
-         //  if(resp.success){
-          //   $('#editAppointmentModal').modal('hide');
-           //  mainCalendar.refetchEvents();
-           //} else {
-            // alert('Error: '+resp.error);
-          // }
-        // },'json');
-       //});
+  // ─── (6) Edit via table buttons ────────────────────────────────────────────
+  $(document).on('click','.edit-apt-btn',function(){
+    const id = $(this).data('id');
+    $('#editAppointmentBody').html('<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading…</div>');
+    $('#editAppointmentModal').modal('show');
+    $.get('/pages/appointments_edit.php',{ id: id }, function(html){
+      $('#editAppointmentBody').html(html);
+      $('#editAppointmentForm').off('submit').on('submit', function(e){
+        e.preventDefault();
+        $.post('/pages/update_appointment.php', $(this).serialize(), function(resp){
+          if (resp.success) {
+            $('#editAppointmentModal').modal('hide');
+            mainCalendar.refetchEvents();
+          } else {
+            alert('Error: ' + resp.error);
+          }
+        }, 'json');
+      });
+    });
+  });
 
-      // ─── Delete appointment ────────────────────────
-       $('.delete-apt-btn').on('click', function(){
-         const id = $(this).data('id');
-         if (!confirm('Delete this appointment?')) return;
-         $.post('/pages/delete_appointment.php', { id: id }, function(resp){
-           if (resp.success) {
-             mainCalendar.refetchEvents();
-             // Optionally also remove from Today’s table:
-             // location.reload();
-           } else {
-             alert('Delete failed: ' + resp.error);
-           }
-         }, 'json');
-       });
-
+  // ─── (7) Delete appointment ────────────────────────────────────────────
+  $(document).on('click','.delete-apt-btn', function(){
+    const id = $(this).data('id');
+    if (!confirm('Delete this appointment?')) return;
+    $.post('/pages/delete_appointment.php',{ id: id }, function(resp){
+      if (resp.success) {
+        mainCalendar.refetchEvents();
+      } else {
+        alert('Delete failed: ' + resp.error);
+      }
+    }, 'json');
+  });
 });
 </script>

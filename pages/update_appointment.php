@@ -6,55 +6,53 @@ requirePermission($pdo, 'appointment.manage');
 header('Content-Type: application/json');
 
 // 1) Fetch & validate ID
-$id = (int)($_POST['id'] ?? 0);
+$id = isset($_POST['id']) ? (int)$_POST['id'] : 0;
 if ($id <= 0) {
   http_response_code(400);
   echo json_encode(['success'=>false,'error'=>'Invalid appointment ID']);
   exit();
 }
 
-// 2) Gather fields
-$appointment_date = $_POST['appointment_date'] ?? '';
-$start_time       = $_POST['start_time']       ?? '';
-$end_time         = $_POST['end_time']         ?? '';
-$staff_id         = (int)($_POST['staff_id']   ?? 0);
-$service_id       = (int)($_POST['service_id'] ?? 0);
-$notes            = trim($_POST['notes']      ?? '');
-$send_sms         = isset($_POST['send_sms'])  ? 1 : 0;
+// 2) Load the existing client_id so we can preserve it if no client data is posted
+$origStmt = $pdo->prepare("SELECT client_id FROM appointments WHERE id = ?");
+$origStmt->execute([$id]);
+$origClientId = $origStmt->fetchColumn();  // may be null or >0
 
-// 3) Determine client
-$client_id    = (int)($_POST['client_id'] ?? 0);
-$client_name  = null;
-$client_phone = null;
-if ($client_id) {
-  // existing client: clear name/phone so they stay null in DB
-  $client_name  = null;
-  $client_phone = null;
-} else {
-  // new walk-in: require both fields
-  $client_name  = trim($_POST['newClientName']  ?? '');
-  $client_phone = trim($_POST['newClientPhone'] ?? '');
-  if ($client_name === '' || $client_phone === '') {
-    http_response_code(400);
-    echo json_encode([
-      'success'=>false,
-      'error'=>'New client name and phone are required if not selecting an existing client.'
-    ]);
-    exit();
-  }
-  // store name/phone and leave client_id null
-  $client_id = null;
-}
+// 3) Gather & validate the rest of your fields
+$appointment_date = trim($_POST['appointment_date'] ?? '');
+$start_time       = trim($_POST['start_time']       ?? '');
+$end_time         = trim($_POST['end_time']         ?? '');
+$staff_id         = isset($_POST['staff_id'])   ? (int)$_POST['staff_id']   : 0;
+$service_id       = isset($_POST['service_id']) ? (int)$_POST['service_id'] : 0;
+$notes            = trim($_POST['notes']        ?? '');
+$send_sms         = isset($_POST['send_sms'])   ? 1 : 0;
 
-// 4) Validate required fields
 if (!$appointment_date || !$start_time || !$end_time || $staff_id <= 0 || $service_id <= 0) {
   http_response_code(400);
   echo json_encode(['success'=>false,'error'=>'Missing required appointment fields.']);
   exit();
 }
 
+// 4) Decide whether the user is keeping the existing client, or creating a new one
+$client_id    = $origClientId;   // by default, keep the old one
+$client_name  = null;
+$client_phone = null;
+
+if (isset($_POST['newClientName']) || isset($_POST['newClientPhone'])) {
+  // explicit “walk-in” branch
+  $client_name  = trim($_POST['newClientName']  ?? '');
+  $client_phone = trim($_POST['newClientPhone'] ?? '');
+  if ($client_name === '' || $client_phone === '') {
+    http_response_code(400);
+    echo json_encode(['success'=>false,'error'=>'New client name and phone are required.']);
+    exit();
+  }
+  // drop the old client_id entirely:
+  $client_id = null;
+}
+
+// 5) Now update
 try {
-  // 5) Update the appointment row
   $stmt = $pdo->prepare("
     UPDATE appointments
        SET appointment_date = :ad,
