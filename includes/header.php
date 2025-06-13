@@ -80,6 +80,56 @@ $page_title = isset($page_title) ? $page_title : '';
       vertical-align: middle;
       border: 1px solid #888;
     }
+
+    /* Dashboard.php box styles */
+    /* 1) Let .small-box grow to its content (instead of fixed height) */
+    .small-box {
+      display: flex !important;
+      flex-direction: column;
+      height: auto !important;
+      padding: 1rem;
+      position: relative; /* for the footer & icon positioning */
+    }
+
+    /* 2) Make the inner area flex & wrap its contents */
+    .small-box .inner {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      overflow-wrap: break-word;
+      word-wrap: break-word;
+      hyphens: auto;
+    }
+
+    /* 3) Force headings and paragraphs to wrap long text */
+    .small-box .inner h3,
+    .small-box .inner p {
+      white-space: normal !important;
+    }
+
+    /* 4) Responsive font‐sizing (optional tweak) */
+    .small-box .inner h3 {
+      font-size: calc(1rem + 0.5vw);
+      line-height: 1.1;
+    }
+    .small-box .inner p {
+      font-size: calc(0.8rem + 0.3vw);
+      line-height: 1.2;
+    }
+
+    /* 5) Keep the icon and footer pinned to their corners */
+    .small-box .icon {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      font-size: calc(1.5rem + 0.5vw);
+      opacity: 0.2;
+    }
+    .small-box-footer {
+      flex-shrink: 0;
+      margin-top: 1rem;
+    }
     </style>
 
 </head>

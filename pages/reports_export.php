@@ -102,7 +102,56 @@ switch ($report) {
         LIMIT 10
     ";
     $params = ['from'=>$from,'to'=>$to];
-    break;   
+    break;
+    
+    case 'top_therapists_appts':
+        $sql ="
+        SELECT
+        ANY_VALUE(CONCAT(t.first_name,' ',t.last_name)) AS therapist_name,
+        COUNT(a.id) AS appt_count
+        FROM appointments a
+        JOIN therapists t ON a.staff_id = t.id
+        WHERE DATE(a.appointment_date) BETWEEN :from AND :to
+        GROUP BY a.staff_id
+        ORDER BY appt_count DESC
+        LIMIT 10
+        ";
+        break;
+    case 'top_therapists_payments':
+        $sql = "
+        SELECT
+        ANY_VALUE(CONCAT(t.first_name,' ',t.last_name)) AS therapist_name,
+        SUM(ss.line_total) AS total_revenue
+        FROM sale_services ss
+        JOIN therapists t ON ss.therapist_id = t.id
+        JOIN sales s ON ss.sale_id = s.id
+        WHERE DATE(s.sale_date) BETWEEN :from AND :to
+        GROUP BY ss.therapist_id
+        ORDER BY total_revenue DESC
+        LIMIT 10
+        ";
+        break;
+    case 'first_appointments':
+        $sql="
+        SELECT
+        CONCAT(c.first_name,' ',c.last_name) AS client_name,
+        MIN(a.appointment_date) AS first_appt_date
+        FROM appointments a
+        JOIN clients c ON a.client_id = c.id
+        GROUP BY a.client_id
+        HAVING DATE(first_appt_date) BETWEEN :from AND :to
+        ORDER BY first_appt_date DESC
+        LIMIT 20
+        ";
+        break;
+    case 'gender_distribution':
+        $sql ="
+        SELECT gender, COUNT(*) AS count
+        FROM clients
+        WHERE DATE(created_at) BETWEEN :from AND :to
+        GROUP BY gender
+        ";
+        break;
   
   default:
     http_response_code(400);
